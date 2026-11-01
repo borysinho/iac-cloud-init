@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Red de asistencia con subred publica para frontend y bastion, subred privada
-  para backend sin salida a Internet. Desplegar antes de compute.yaml.
+  para backend con salida a repositorios mediante NAT. Desplegar antes de compute.yaml.
 Metadata:
   AWSToolsMetrics:
     AWSAgentToolkit: aws-cloudformation@3
@@ -23,7 +23,7 @@ Parameters:
     Description: IP administrativa autorizada para SSH; usar una IP /32.
   WebSourceCidr:
     Type: String
-    Description: CIDR IPv4 autorizado para HTTP y HTTPS; usar una red controlada.
+    Description: CIDR IPv4 autorizado para HTTP; usar una red controlada.
     AllowedPattern: '([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])'
 Resources:
   GlobomaticsVpc:
@@ -60,7 +60,7 @@ Resources:
     Type: AWS::EC2::InternetGateway
     Metadata:
       com.aws.cloudformation.Context:
-        why: Acceso publico y salida a Internet exclusivamente para el frontend.
+        why: Acceso publico del frontend y salida del NAT hacia los repositorios.
     Properties:
       Tags:
         - { Key: Name, Value: !Sub "igw-${Project}-${Environment}" }
@@ -107,10 +107,10 @@ Resources:
     Type: AWS::EC2::Subnet
     Metadata:
       com.aws.cloudformation.Context:
-        why: Aislar el backend sin IP publica ni salida a Internet, en la misma zona que el frontend.
+        why: Aislar el backend sin IP publica, con salida por NAT, en la misma zona que el frontend.
         must:
           [
-            Mantener el backend 10.42.2.20 en esta subred; sin rutas a Internet Gateway ni NAT.,
+            Mantener el backend 10.42.2.20 sin IP publica; salida exclusivamente por NAT.,
           ]
     Properties:
       VpcId: !Ref GlobomaticsVpc
@@ -125,8 +125,8 @@ Resources:
     Type: AWS::EC2::RouteTable
     Metadata:
       com.aws.cloudformation.Context:
-        why: Tabla privada con solo la ruta local implicita de la VPC; backend sin salida a Internet.
-        must: [No agregar ruta predeterminada ni NAT a esta tabla.]
+        why: Tabla privada con salida por NAT para instalar los servicios del backend.
+        must: [La ruta predeterminada debe apuntar al NAT; nunca directamente al Internet Gateway.]
     Properties:
       VpcId: !Ref GlobomaticsVpc
       Tags:
@@ -204,7 +204,7 @@ Resources:
           SourceSecurityGroupId: !Ref GlobomaticsClientSecurityGroup
       SecurityGroupEgress:
         - {
-            Description: Salida sujeta a rutas privadas de la VPC; sin Internet,
+            Description: Salida por NAT para paquetes del backend,
             IpProtocol: "-1",
             CidrIp: 0.0.0.0/0,
           }
@@ -212,6 +212,42 @@ Resources:
         - { Key: Name, Value: !Sub "secgrp-backend-${Project}-${Environment}" }
         - { Key: Project, Value: !Ref Project }
         - { Key: ManagedBy, Value: CloudFormation }
+  GlobomaticsNatEip:
+    Type: AWS::EC2::EIP
+    DependsOn: GlobomaticsGatewayAttachment
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Direccion publica del NAT para descargar los paquetes del backend privado.
+        must: [No asignar esta IP al backend.]
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "eip-nat-${Project}-${Environment}" }
+        - { Key: Project, Value: !Ref Project }
+  GlobomaticsNatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: GlobomaticsDefaultRoute
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Salida a repositorios desde la subred privada sin publicar el backend.
+        must: [Ubicar en la subred publica; tiene costo mientras exista.]
+    Properties:
+      AllocationId: !GetAtt GlobomaticsNatEip.AllocationId
+      SubnetId: !Ref GlobomaticsPublicSubnet
+      ConnectivityType: public
+      Tags:
+        - { Key: Name, Value: !Sub "nat-${Project}-${Environment}" }
+        - { Key: Project, Value: !Ref Project }
+  GlobomaticsPrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Permitir descargas HTTPS y HTTP de paquetes durante cloud-init.
+        must: [Conservar el backend sin IP publica y sin entradas adicionales.]
+    Properties:
+      RouteTableId: !Ref GlobomaticsPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref GlobomaticsNatGateway
 Outputs:
   VpcId:
     Description: VPC del laboratorio; subred y grupos pertenecen a esta VPC.

@@ -3,8 +3,8 @@ template-file-path: infra/cloudformation/network.yaml
 parameters:
   Project: asistencia
   Environment: cloudinit
-  SshSourceCidr: 192.0.2.1/32
-  WebSourceCidr: 192.0.2.1/32
+  SshSourceCidr: 181.188.164.3/32
+  WebSourceCidr: 0.0.0.0/0
 tags:
   Project: asistencia
   Environment: cloudinit

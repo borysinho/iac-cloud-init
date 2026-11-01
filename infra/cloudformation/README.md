@@ -1,9 +1,11 @@
 # CloudFormation: aplicación de asistencia
 
+Para realizar el despliegue desde cero, sigue la [guía paso a paso](GUIA-PASO-A-PASO.md).
+
 Solo dos pilas, sin pila raíz ni pilas anidadas:
 
-- `network.yaml`: VPC, subred pública para cliente, subred privada para backend, Internet Gateway, rutas y dos grupos de seguridad.
-- `compute.yaml`: dos EC2 `t3.micro` y una clave SSH pública importada.
+- `network.yaml`: VPC, subred pública para cliente, subred privada para backend, Internet Gateway, NAT Gateway con Elastic IP, rutas y dos grupos de seguridad.
+- `compute.yaml`: dos EC2 `t3.micro` con créditos CPU en modo `standard`, Ubuntu Server 24.04 LTS amd64 y una clave SSH pública importada.
 
 | Servidor | IP privada | Función |
 |---|---|---|
@@ -14,7 +16,9 @@ El cliente recibe IP pública dinámica. HTTP se permite desde `WebSourceCidr` y
 
 ## Cloud-init compartido
 
-La única fuente es [`../cloud-init.yaml`](../cloud-init.yaml), también para las futuras implementaciones OpenTofu y Pulumi. Por ahora configura zona horaria y acceso SSH; **la instalación de Nginx, Node.js, MySQL y la aplicación queda para el siguiente paso**.
+La única fuente es [`../cloud-init.yaml`](../cloud-init.yaml), también para las futuras implementaciones OpenTofu y Pulumi. Instala Nginx en el cliente y Node.js 24 con npm y MySQL en el backend. Detecta la función por la IP privada: `10.42.1.10` o `10.42.2.20`. Una IP desconocida produce un error antes de instalar paquetes. Las futuras configuraciones OpenTofu y Pulumi deben conservar ese mapa o actualizarlo en la fuente común.
+
+MySQL se configura con escucha en `127.0.0.1` para sus puertos SQL y X Protocol. El administrador local utiliza autenticación por socket (`sudo mysql`). Se habilitan Nginx y MySQL al arrancar. Node.js es el runtime; su servicio de aplicación se agregará cuando se copie el código y se definan las credenciales. Todavía no se crean la base de la aplicación, usuarios de negocio, `.env.backend` ni el servicio `asistencia`.
 
 CloudFormation no lee archivos vecinos del repositorio. Desde la raíz de `cloud-init/`, ejecuta:
 
@@ -25,7 +29,9 @@ python3 infra/cloudformation/scripts/sync-cloud-init.py --check
 
 El script incorpora exactamente los mismos bytes en Base64 en `UserData` de ambas EC2. Publica juntos el archivo compartido y `compute.yaml` regenerado: Git Sync vigila la plantilla y el archivo de despliegue. OpenTofu y Pulumi deberán leer la misma fuente directamente.
 
-El backend conserva la subred privada sin Internet de la práctica anterior. Para instalar los servicios en el siguiente paso se necesitarán paquetes offline, una AMI preparada o adaptar explícitamente la salida de red. No se ha añadido NAT. Actualizar UserData no vuelve a ejecutar automáticamente todos los módulos de primer arranque de cloud-init en una instancia existente.
+El backend permanece sin IP pública. Su nueva ruta de salida usa un NAT Gateway en la subred pública para descargar paquetes de Ubuntu y NodeSource. El NAT y su Elastic IP tienen costo mientras existan. Los creditos aplicables pueden cubrir ese consumo; no se ha comprobado el plan ni el saldo de esta cuenta, por lo que no se garantiza ausencia de cobros a la tarjeta. Antes de desplegar, revisar Billing → Credits y el tipo de plan. No se agregan entradas al grupo de seguridad del backend. Se mantienen exactamente dos pilas y dos EC2.
+
+La AMI cambia de Amazon Linux a Ubuntu 24.04 para instalar MySQL desde los repositorios de Ubuntu. Node.js 24 se obtiene del repositorio firmado de NodeSource. La clave SSH pública es la misma, pero el usuario SSH ahora es `ubuntu`. El dispositivo raíz declarado es `/dev/sda1`, correspondiente a esta AMI.
 
 ## Git Sync
 
@@ -40,6 +46,38 @@ Los dos archivos de `deployments/` ya están preparados para seleccionar **I am 
 
 `NetworkStackName` debe coincidir con el nombre de la pila de red. Cómputo importa sus salidas por nombre; no se reutilizan IDs anteriores. Ambas pilas deben estar en la misma cuenta y región. Eliminar primero cómputo y después red. Antes de modificar exportaciones existentes, comprobar sus consumidores con `aws cloudformation list-imports --export-name NOMBRE`.
 
+## Aplicar este paso
+
+1. Actualiza en IAM la política insertada del rol con `iam/execution-policy.json`: incluye NAT/EIP y lectura del parámetro de AMI Ubuntu. Publicar el JSON en Git no actualiza IAM.
+2. Regenera `compute.yaml` con el script de sincronización y publica ambos archivos junto con las plantillas y los archivos de despliegue. Conserva tu clave pública y CIDR personalizados.
+3. Aplica primero red y espera `UPDATE_COMPLETE` o `CREATE_COMPLETE`; NAT y ruta privada deben estar disponibles antes de crear las instancias.
+4. Después aplica cómputo. **Cambiar la AMI reemplaza las EC2**, cuyos discos raíz se eliminan: respalda MySQL si el backend ya contiene datos. No es una actualización en sitio del sistema operativo.
+5. Espera el resultado de cloud-init en cada servidor. `CREATE_COMPLETE` de CloudFormation no garantiza que haya terminado la instalación: esta plantilla no añade señales de finalización de cloud-init al stack.
+
+```bash
+# En ambos servidores, mediante SSH como ubuntu.
+sudo cloud-init status --wait --long
+sudo tail -n 100 /var/log/cloud-init-output.log
+
+# Cliente
+systemctl is-enabled nginx
+systemctl is-active nginx
+curl -I http://127.0.0.1
+
+# Backend (SSH a traves del cliente)
+node --version
+npm --version
+systemctl is-enabled mysql
+systemctl is-active mysql
+sudo mysqladmin --protocol=socket ping
+sudo mysql -e "SELECT @@bind_address, @@mysqlx_bind_address;"
+sudo ss -lntp | grep -E ':(3306|33060)\b'
+```
+
+Esperado: Nginx activo en el cliente, Node `v24.x`, MySQL activo y escuchando solo en localhost. Nginx todavía sirve su página predeterminada; la aplicación se desplegará en el siguiente paso. Si cloud-init falla, revisar el registro antes de reintentar. El instalador conserva los datos de MySQL; no borra ni reinicializa la base.
+
+Actualizar UserData no vuelve a ejecutar automáticamente todos los módulos de primer arranque en instancias existentes. Este paso se ejecuta automáticamente al crear las nuevas instancias Ubuntu. Para comprobar un servidor ya inicializado se usan los comandos anteriores, no se presupone que reiniciar lo reconfigure.
+
 ## Validación
 
 ```bash
@@ -47,6 +85,10 @@ python3 infra/cloudformation/scripts/sync-cloud-init.py --check
 cfn-lint infra/cloudformation/network.yaml infra/cloudformation/compute.yaml
 ```
 
+Se comprobó localmente la sintaxis YAML/JSON, referencias, tamaño de plantillas, coincidencia del UserData y las ramas del instalador con comandos simulados (incluidos errores de IP y APT). No se ejecutó una instalación real en EC2. `cloud-init schema`, `cfn-lint` y `cfn-guard` no están instalados en el entorno de trabajo: su validación de esquema y seguridad/compliance queda pendiente.
+
 Confirmar la AMI pública SSM en la región y revisar el change set antes de aplicar. Esta preparación no crea recursos ni configura IAM en AWS.
 
 Referencias: [Git Sync](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/git-sync-create-stack-from-repository-source-code.html), [UserData EC2](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-instance.html).
+
+Fuentes de instalación: [AMI Ubuntu en CloudFormation](https://documentation.ubuntu.com/aws/aws-how-to/instances/build-cloudformation-templates/), [MySQL en Ubuntu](https://ubuntu.com/server/docs/databases-mysql/), [NodeSource 24](https://github.com/nodesource/distributions/blob/master/scripts/deb/setup_24.x), [NAT Gateway](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-ec2-natgateway.html).

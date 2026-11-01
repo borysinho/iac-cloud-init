@@ -34,4 +34,10 @@ Consulta [la documentación de la aplicación](app/README.md) para sus requisito
 
 ## Paso 2: infraestructura CloudFormation
 
-Se prepararon dos pilas y los archivos de Git Sync y del rol IAM en [infra/cloudformation/](infra/cloudformation/README.md). El único `infra/cloud-init.yaml` se incorpora a las dos EC2 mediante un script de sincronización. Por ahora aplica configuración base; la instalación de servicios y el despliegue de la aplicación quedan para los siguientes pasos. OpenTofu y Pulumi permanecen pendientes. No se han creado recursos en AWS.
+Se prepararon dos pilas y los archivos de Git Sync y del rol IAM en [infra/cloudformation/](infra/cloudformation/README.md). El único `infra/cloud-init.yaml` se incorpora a las dos EC2 mediante un script de sincronización. El paso inicial aplicaba configuración base; ahora también instala los servicios descritos abajo. El despliegue de la aplicación queda para el siguiente paso. OpenTofu y Pulumi permanecen pendientes. No se han creado recursos en AWS.
+
+## Paso 3: instalación de servicios
+
+El único `infra/cloud-init.yaml` instala Nginx en el cliente y Node.js 24 con npm y MySQL en el backend. Se utiliza Ubuntu Server 24.04 LTS y salida del backend privado mediante NAT Gateway. La configuración mantiene dos pilas y dos servidores. El NAT añade costo al desplegarlo.
+
+Antes de aplicar: actualizar la política IAM, completar red y después actualizar cómputo. El cambio de AMI reemplaza las EC2; respalda cualquier base existente. Consulta las instrucciones de comprobación en [CloudFormation](infra/cloudformation/README.md). La aplicación, su base y sus credenciales se configurarán en el siguiente paso. No se ha desplegado en AWS.

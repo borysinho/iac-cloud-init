@@ -1,6 +1,82 @@
 #cloud-config
-# Fuente unica para OpenTofu, Pulumi y CloudFormation.
-# La instalacion de los servicios de la aplicacion se agregara en el siguiente paso.
+# Fuente unica para CloudFormation, OpenTofu y Pulumi. Ubuntu Server 24.04 amd64.
 timezone: America/La_Paz
 ssh_pwauth: false
 disable_root: true
+write_files:
+- path: /usr/local/sbin/asistencia-install-services
+  owner: root:root
+  permissions: '0750'
+  content: |
+    #!/bin/bash
+    set -euo pipefail
+    trap 'echo "ERROR: instalacion de servicios interrumpida en linea $LINENO" >&2' ERR
+
+    # Este archivo compartido funciona con las IP privadas del laboratorio.
+    # Cambiar aqui el mapa si las futuras herramientas cambian las direcciones.
+    local_ipv4=$(ip -4 -o address show scope global | awk '{split($4, a, "/"); print a[1]}')
+    if grep -Fxq '10.42.1.10' <<< "$local_ipv4"; then
+        role=client
+    elif grep -Fxq '10.42.2.20' <<< "$local_ipv4"; then
+        role=backend
+    else
+        echo "IP privada desconocida; no se instalaran servicios" >&2
+        exit 1
+    fi
+
+    . /etc/os-release
+    if [[ "$ID" != ubuntu || "$VERSION_ID" != 24.04 ]]; then
+        echo "Esta configuracion requiere Ubuntu Server 24.04" >&2
+        exit 1
+    fi
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    # Esperar los bloqueos de APT y reintentar descargas transitorias.
+    apt_options=(-o DPkg::Lock::Timeout=300 -o Acquire::Retries=5)
+    apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+
+    case "$role" in
+        client)
+            apt-get "${apt_options[@]}" install -y --no-install-recommends nginx
+            nginx -t
+            systemctl enable --now nginx
+            systemctl is-active --quiet nginx
+            ;;
+        backend)
+            apt-get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
+            install -d -m 0755 /usr/share/keyrings
+            key_file=$(mktemp)
+            trap 'rm -f "$key_file"' EXIT
+            curl --fail --silent --show-error --location --retry 5 --connect-timeout 10 --max-time 120 \
+                https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o "$key_file"
+            gpg --batch --yes --dearmor -o /usr/share/keyrings/nodesource.gpg "$key_file"
+            chmod 0644 /usr/share/keyrings/nodesource.gpg
+            cat > /etc/apt/sources.list.d/nodesource.sources <<'REPO'
+    Types: deb
+    URIs: https://deb.nodesource.com/node_24.x
+    Suites: nodistro
+    Components: main
+    Architectures: amd64
+    Signed-By: /usr/share/keyrings/nodesource.gpg
+    REPO
+            apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+            apt-get "${apt_options[@]}" install -y --no-install-recommends nodejs mysql-server
+            # La aplicacion se conecta por TCP local, sin exponer MySQL a la VPC.
+            cat > /etc/mysql/mysql.conf.d/99-asistencia.cnf <<'MYSQL'
+    [mysqld]
+    bind-address = 127.0.0.1
+    mysqlx-bind-address = 127.0.0.1
+    MYSQL
+            systemctl enable mysql
+            systemctl restart mysql
+            systemctl is-active --quiet mysql
+            node --version | grep -E '^v24\.'
+            npm --version
+            mysqladmin --protocol=socket ping
+            mysql --protocol=socket --batch --skip-column-names \
+                -e "SELECT @@bind_address, @@mysqlx_bind_address;"
+            ;;
+    esac
+    echo "Servicios de $role instalados correctamente"
+runcmd:
+- - /usr/local/sbin/asistencia-install-services

@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Dos EC2 para asistencia con discos cifrados e IMDSv2: cliente Nginx publico
-  y backend Node.js con MySQL local en subred privada. Cloud-init base compartido.
+  y backend Node.js con MySQL local en subred privada. Instalacion de servicios mediante cloud-init compartido.
 Metadata:
   AWSToolsMetrics:
     AWSAgentToolkit: aws-cloudformation@3
@@ -26,8 +26,8 @@ Parameters:
     Description: Contenido de la clave PUBLICA OpenSSH existente, nunca la privada.
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.18-x86_64
-    Description: AMI oficial Amazon Linux 2023 x86_64 de la familia kernel 6.18.
+    Default: /aws/service/canonical/ubuntu/server/noble/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: AMI oficial Ubuntu Server 24.04 LTS amd64.
 Resources:
   GlobomaticsKeyPair:
     Type: AWS::EC2::KeyPair
@@ -49,7 +49,7 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       com.aws.cloudformation.Context:
-        why: Servidor cliente con configuracion base cloud-init; volumen raiz hereda las etiquetas del EC2.
+        why: Servidor cliente con Nginx instalado mediante cloud-init; volumen raiz hereda las etiquetas del EC2.
         must:
           - Desplegar tras completar network.yaml; subred y grupo deben pertenecer a su misma VPC.
           - Conservar IP privada fija, IP publica dinamica, cifrado e IMDSv2 obligatorio.
@@ -57,16 +57,18 @@ Resources:
         mutable: review-required
     Properties:
       # BEGIN SHARED CLOUD INIT
-      UserData: "I2Nsb3VkLWNvbmZpZwojIEZ1ZW50ZSB1bmljYSBwYXJhIE9wZW5Ub2Z1LCBQdWx1bWkgeSBDbG91ZEZvcm1hdGlvbi4KIyBMYSBpbnN0YWxhY2lvbiBkZSBsb3Mgc2VydmljaW9zIGRlIGxhIGFwbGljYWNpb24gc2UgYWdyZWdhcmEgZW4gZWwgc2lndWllbnRlIHBhc28uCnRpbWV6b25lOiBBbWVyaWNhL0xhX1Bhegpzc2hfcHdhdXRoOiBmYWxzZQpkaXNhYmxlX3Jvb3Q6IHRydWUK"
+      UserData: "I2Nsb3VkLWNvbmZpZwojIEZ1ZW50ZSB1bmljYSBwYXJhIENsb3VkRm9ybWF0aW9uLCBPcGVuVG9mdSB5IFB1bHVtaS4gVWJ1bnR1IFNlcnZlciAyNC4wNCBhbWQ2NC4KdGltZXpvbmU6IEFtZXJpY2EvTGFfUGF6CnNzaF9wd2F1dGg6IGZhbHNlCmRpc2FibGVfcm9vdDogdHJ1ZQp3cml0ZV9maWxlczoKLSBwYXRoOiAvdXNyL2xvY2FsL3NiaW4vYXNpc3RlbmNpYS1pbnN0YWxsLXNlcnZpY2VzCiAgb3duZXI6IHJvb3Q6cm9vdAogIHBlcm1pc3Npb25zOiAnMDc1MCcKICBjb250ZW50OiB8CiAgICAjIS9iaW4vYmFzaAogICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgIHRyYXAgJ2VjaG8gIkVSUk9SOiBpbnN0YWxhY2lvbiBkZSBzZXJ2aWNpb3MgaW50ZXJydW1waWRhIGVuIGxpbmVhICRMSU5FTk8iID4mMicgRVJSCgogICAgIyBFc3RlIGFyY2hpdm8gY29tcGFydGlkbyBmdW5jaW9uYSBjb24gbGFzIElQIHByaXZhZGFzIGRlbCBsYWJvcmF0b3Jpby4KICAgICMgQ2FtYmlhciBhcXVpIGVsIG1hcGEgc2kgbGFzIGZ1dHVyYXMgaGVycmFtaWVudGFzIGNhbWJpYW4gbGFzIGRpcmVjY2lvbmVzLgogICAgbG9jYWxfaXB2ND0kKGlwIC00IC1vIGFkZHJlc3Mgc2hvdyBzY29wZSBnbG9iYWwgfCBhd2sgJ3tzcGxpdCgkNCwgYSwgIi8iKTsgcHJpbnQgYVsxXX0nKQogICAgaWYgZ3JlcCAtRnhxICcxMC40Mi4xLjEwJyA8PDwgIiRsb2NhbF9pcHY0IjsgdGhlbgogICAgICAgIHJvbGU9Y2xpZW50CiAgICBlbGlmIGdyZXAgLUZ4cSAnMTAuNDIuMi4yMCcgPDw8ICIkbG9jYWxfaXB2NCI7IHRoZW4KICAgICAgICByb2xlPWJhY2tlbmQKICAgIGVsc2UKICAgICAgICBlY2hvICJJUCBwcml2YWRhIGRlc2Nvbm9jaWRhOyBubyBzZSBpbnN0YWxhcmFuIHNlcnZpY2lvcyIgPiYyCiAgICAgICAgZXhpdCAxCiAgICBmaQoKICAgIC4gL2V0Yy9vcy1yZWxlYXNlCiAgICBpZiBbWyAiJElEIiAhPSB1YnVudHUgfHwgIiRWRVJTSU9OX0lEIiAhPSAyNC4wNCBdXTsgdGhlbgogICAgICAgIGVjaG8gIkVzdGEgY29uZmlndXJhY2lvbiByZXF1aWVyZSBVYnVudHUgU2VydmVyIDI0LjA0IiA+JjIKICAgICAgICBleGl0IDEKICAgIGZpCiAgICBleHBvcnQgREVCSUFOX0ZST05URU5EPW5vbmludGVyYWN0aXZlCiAgICBleHBvcnQgTkVFRFJFU1RBUlRfTU9ERT1hCiAgICAjIEVzcGVyYXIgbG9zIGJsb3F1ZW9zIGRlIEFQVCB5IHJlaW50ZW50YXIgZGVzY2FyZ2FzIHRyYW5zaXRvcmlhcy4KICAgIGFwdF9vcHRpb25zPSgtbyBEUGtnOjpMb2NrOjpUaW1lb3V0PTMwMCAtbyBBY3F1aXJlOjpSZXRyaWVzPTUpCiAgICBhcHQtZ2V0ICIke2FwdF9vcHRpb25zW0BdfSIgLW8gQVBUOjpVcGRhdGU6OkVycm9yLU1vZGU9YW55IHVwZGF0ZQoKICAgIGNhc2UgIiRyb2xlIiBpbgogICAgICAgIGNsaWVudCkKICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgbmdpbngKICAgICAgICAgICAgbmdpbnggLXQKICAgICAgICAgICAgc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyBuZ2lueAogICAgICAgICAgICBzeXN0ZW1jdGwgaXMtYWN0aXZlIC0tcXVpZXQgbmdpbngKICAgICAgICAgICAgOzsKICAgICAgICBiYWNrZW5kKQogICAgICAgICAgICBhcHQtZ2V0ICIke2FwdF9vcHRpb25zW0BdfSIgaW5zdGFsbCAteSAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyBjYS1jZXJ0aWZpY2F0ZXMgY3VybCBnbnVwZwogICAgICAgICAgICBpbnN0YWxsIC1kIC1tIDA3NTUgL3Vzci9zaGFyZS9rZXlyaW5ncwogICAgICAgICAgICBrZXlfZmlsZT0kKG1rdGVtcCkKICAgICAgICAgICAgdHJhcCAncm0gLWYgIiRrZXlfZmlsZSInIEVYSVQKICAgICAgICAgICAgY3VybCAtLWZhaWwgLS1zaWxlbnQgLS1zaG93LWVycm9yIC0tbG9jYXRpb24gLS1yZXRyeSA1IC0tY29ubmVjdC10aW1lb3V0IDEwIC0tbWF4LXRpbWUgMTIwIFwKICAgICAgICAgICAgICAgIGh0dHBzOi8vZGViLm5vZGVzb3VyY2UuY29tL2dwZ2tleS9ub2Rlc291cmNlLXJlcG8uZ3BnLmtleSAtbyAiJGtleV9maWxlIgogICAgICAgICAgICBncGcgLS1iYXRjaCAtLXllcyAtLWRlYXJtb3IgLW8gL3Vzci9zaGFyZS9rZXlyaW5ncy9ub2Rlc291cmNlLmdwZyAiJGtleV9maWxlIgogICAgICAgICAgICBjaG1vZCAwNjQ0IC91c3Ivc2hhcmUva2V5cmluZ3Mvbm9kZXNvdXJjZS5ncGcKICAgICAgICAgICAgY2F0ID4gL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvbm9kZXNvdXJjZS5zb3VyY2VzIDw8J1JFUE8nCiAgICBUeXBlczogZGViCiAgICBVUklzOiBodHRwczovL2RlYi5ub2Rlc291cmNlLmNvbS9ub2RlXzI0LngKICAgIFN1aXRlczogbm9kaXN0cm8KICAgIENvbXBvbmVudHM6IG1haW4KICAgIEFyY2hpdGVjdHVyZXM6IGFtZDY0CiAgICBTaWduZWQtQnk6IC91c3Ivc2hhcmUva2V5cmluZ3Mvbm9kZXNvdXJjZS5ncGcKICAgIFJFUE8KICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIC1vIEFQVDo6VXBkYXRlOjpFcnJvci1Nb2RlPWFueSB1cGRhdGUKICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgbm9kZWpzIG15c3FsLXNlcnZlcgogICAgICAgICAgICAjIExhIGFwbGljYWNpb24gc2UgY29uZWN0YSBwb3IgVENQIGxvY2FsLCBzaW4gZXhwb25lciBNeVNRTCBhIGxhIFZQQy4KICAgICAgICAgICAgY2F0ID4gL2V0Yy9teXNxbC9teXNxbC5jb25mLmQvOTktYXNpc3RlbmNpYS5jbmYgPDwnTVlTUUwnCiAgICBbbXlzcWxkXQogICAgYmluZC1hZGRyZXNzID0gMTI3LjAuMC4xCiAgICBteXNxbHgtYmluZC1hZGRyZXNzID0gMTI3LjAuMC4xCiAgICBNWVNRTAogICAgICAgICAgICBzeXN0ZW1jdGwgZW5hYmxlIG15c3FsCiAgICAgICAgICAgIHN5c3RlbWN0bCByZXN0YXJ0IG15c3FsCiAgICAgICAgICAgIHN5c3RlbWN0bCBpcy1hY3RpdmUgLS1xdWlldCBteXNxbAogICAgICAgICAgICBub2RlIC0tdmVyc2lvbiB8IGdyZXAgLUUgJ152MjRcLicKICAgICAgICAgICAgbnBtIC0tdmVyc2lvbgogICAgICAgICAgICBteXNxbGFkbWluIC0tcHJvdG9jb2w9c29ja2V0IHBpbmcKICAgICAgICAgICAgbXlzcWwgLS1wcm90b2NvbD1zb2NrZXQgLS1iYXRjaCAtLXNraXAtY29sdW1uLW5hbWVzIFwKICAgICAgICAgICAgICAgIC1lICJTRUxFQ1QgQEBiaW5kX2FkZHJlc3MsIEBAbXlzcWx4X2JpbmRfYWRkcmVzczsiCiAgICAgICAgICAgIDs7CiAgICBlc2FjCiAgICBlY2hvICJTZXJ2aWNpb3MgZGUgJHJvbGUgaW5zdGFsYWRvcyBjb3JyZWN0YW1lbnRlIgpydW5jbWQ6Ci0gLSAvdXNyL2xvY2FsL3NiaW4vYXNpc3RlbmNpYS1pbnN0YWxsLXNlcnZpY2VzCg=="
       # END SHARED CLOUD INIT
       ImageId: !Ref LatestAmiId
+      CreditSpecification:
+        CPUCredits: standard
       InstanceType: t3.micro
       KeyName: !Ref GlobomaticsKeyPair
       MetadataOptions:
         HttpEndpoint: enabled
         HttpTokens: required
       BlockDeviceMappings:
-        - DeviceName: /dev/xvda
+        - DeviceName: /dev/sda1
           Ebs:
             VolumeType: gp3
             VolumeSize: 12
@@ -89,24 +91,26 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       com.aws.cloudformation.Context:
-        why: Backend privado sin IP publica ni Internet; SSH mediante frontend bastion y API solo desde frontend.
+        why: Backend privado sin IP publica, con salida por NAT para instalar Node.js y MySQL; SSH mediante frontend bastion y API solo desde frontend.
         must:
           - Desplegar tras completar network.yaml; subred y grupo deben pertenecer a su misma VPC.
-          - Conservar IP privada fija, ausencia de IP publica y de Internet, cifrado e IMDSv2 obligatorio.
+          - Conservar IP privada fija, ausencia de IP publica, salida por NAT, cifrado e IMDSv2 obligatorio.
           - Respaldar datos antes del reemplazo o borrado; el disco raiz se elimina con el EC2.
         mutable: review-required
     Properties:
       # BEGIN SHARED CLOUD INIT
-      UserData: "I2Nsb3VkLWNvbmZpZwojIEZ1ZW50ZSB1bmljYSBwYXJhIE9wZW5Ub2Z1LCBQdWx1bWkgeSBDbG91ZEZvcm1hdGlvbi4KIyBMYSBpbnN0YWxhY2lvbiBkZSBsb3Mgc2VydmljaW9zIGRlIGxhIGFwbGljYWNpb24gc2UgYWdyZWdhcmEgZW4gZWwgc2lndWllbnRlIHBhc28uCnRpbWV6b25lOiBBbWVyaWNhL0xhX1Bhegpzc2hfcHdhdXRoOiBmYWxzZQpkaXNhYmxlX3Jvb3Q6IHRydWUK"
+      UserData: "I2Nsb3VkLWNvbmZpZwojIEZ1ZW50ZSB1bmljYSBwYXJhIENsb3VkRm9ybWF0aW9uLCBPcGVuVG9mdSB5IFB1bHVtaS4gVWJ1bnR1IFNlcnZlciAyNC4wNCBhbWQ2NC4KdGltZXpvbmU6IEFtZXJpY2EvTGFfUGF6CnNzaF9wd2F1dGg6IGZhbHNlCmRpc2FibGVfcm9vdDogdHJ1ZQp3cml0ZV9maWxlczoKLSBwYXRoOiAvdXNyL2xvY2FsL3NiaW4vYXNpc3RlbmNpYS1pbnN0YWxsLXNlcnZpY2VzCiAgb3duZXI6IHJvb3Q6cm9vdAogIHBlcm1pc3Npb25zOiAnMDc1MCcKICBjb250ZW50OiB8CiAgICAjIS9iaW4vYmFzaAogICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgIHRyYXAgJ2VjaG8gIkVSUk9SOiBpbnN0YWxhY2lvbiBkZSBzZXJ2aWNpb3MgaW50ZXJydW1waWRhIGVuIGxpbmVhICRMSU5FTk8iID4mMicgRVJSCgogICAgIyBFc3RlIGFyY2hpdm8gY29tcGFydGlkbyBmdW5jaW9uYSBjb24gbGFzIElQIHByaXZhZGFzIGRlbCBsYWJvcmF0b3Jpby4KICAgICMgQ2FtYmlhciBhcXVpIGVsIG1hcGEgc2kgbGFzIGZ1dHVyYXMgaGVycmFtaWVudGFzIGNhbWJpYW4gbGFzIGRpcmVjY2lvbmVzLgogICAgbG9jYWxfaXB2ND0kKGlwIC00IC1vIGFkZHJlc3Mgc2hvdyBzY29wZSBnbG9iYWwgfCBhd2sgJ3tzcGxpdCgkNCwgYSwgIi8iKTsgcHJpbnQgYVsxXX0nKQogICAgaWYgZ3JlcCAtRnhxICcxMC40Mi4xLjEwJyA8PDwgIiRsb2NhbF9pcHY0IjsgdGhlbgogICAgICAgIHJvbGU9Y2xpZW50CiAgICBlbGlmIGdyZXAgLUZ4cSAnMTAuNDIuMi4yMCcgPDw8ICIkbG9jYWxfaXB2NCI7IHRoZW4KICAgICAgICByb2xlPWJhY2tlbmQKICAgIGVsc2UKICAgICAgICBlY2hvICJJUCBwcml2YWRhIGRlc2Nvbm9jaWRhOyBubyBzZSBpbnN0YWxhcmFuIHNlcnZpY2lvcyIgPiYyCiAgICAgICAgZXhpdCAxCiAgICBmaQoKICAgIC4gL2V0Yy9vcy1yZWxlYXNlCiAgICBpZiBbWyAiJElEIiAhPSB1YnVudHUgfHwgIiRWRVJTSU9OX0lEIiAhPSAyNC4wNCBdXTsgdGhlbgogICAgICAgIGVjaG8gIkVzdGEgY29uZmlndXJhY2lvbiByZXF1aWVyZSBVYnVudHUgU2VydmVyIDI0LjA0IiA+JjIKICAgICAgICBleGl0IDEKICAgIGZpCiAgICBleHBvcnQgREVCSUFOX0ZST05URU5EPW5vbmludGVyYWN0aXZlCiAgICBleHBvcnQgTkVFRFJFU1RBUlRfTU9ERT1hCiAgICAjIEVzcGVyYXIgbG9zIGJsb3F1ZW9zIGRlIEFQVCB5IHJlaW50ZW50YXIgZGVzY2FyZ2FzIHRyYW5zaXRvcmlhcy4KICAgIGFwdF9vcHRpb25zPSgtbyBEUGtnOjpMb2NrOjpUaW1lb3V0PTMwMCAtbyBBY3F1aXJlOjpSZXRyaWVzPTUpCiAgICBhcHQtZ2V0ICIke2FwdF9vcHRpb25zW0BdfSIgLW8gQVBUOjpVcGRhdGU6OkVycm9yLU1vZGU9YW55IHVwZGF0ZQoKICAgIGNhc2UgIiRyb2xlIiBpbgogICAgICAgIGNsaWVudCkKICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgbmdpbngKICAgICAgICAgICAgbmdpbnggLXQKICAgICAgICAgICAgc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyBuZ2lueAogICAgICAgICAgICBzeXN0ZW1jdGwgaXMtYWN0aXZlIC0tcXVpZXQgbmdpbngKICAgICAgICAgICAgOzsKICAgICAgICBiYWNrZW5kKQogICAgICAgICAgICBhcHQtZ2V0ICIke2FwdF9vcHRpb25zW0BdfSIgaW5zdGFsbCAteSAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyBjYS1jZXJ0aWZpY2F0ZXMgY3VybCBnbnVwZwogICAgICAgICAgICBpbnN0YWxsIC1kIC1tIDA3NTUgL3Vzci9zaGFyZS9rZXlyaW5ncwogICAgICAgICAgICBrZXlfZmlsZT0kKG1rdGVtcCkKICAgICAgICAgICAgdHJhcCAncm0gLWYgIiRrZXlfZmlsZSInIEVYSVQKICAgICAgICAgICAgY3VybCAtLWZhaWwgLS1zaWxlbnQgLS1zaG93LWVycm9yIC0tbG9jYXRpb24gLS1yZXRyeSA1IC0tY29ubmVjdC10aW1lb3V0IDEwIC0tbWF4LXRpbWUgMTIwIFwKICAgICAgICAgICAgICAgIGh0dHBzOi8vZGViLm5vZGVzb3VyY2UuY29tL2dwZ2tleS9ub2Rlc291cmNlLXJlcG8uZ3BnLmtleSAtbyAiJGtleV9maWxlIgogICAgICAgICAgICBncGcgLS1iYXRjaCAtLXllcyAtLWRlYXJtb3IgLW8gL3Vzci9zaGFyZS9rZXlyaW5ncy9ub2Rlc291cmNlLmdwZyAiJGtleV9maWxlIgogICAgICAgICAgICBjaG1vZCAwNjQ0IC91c3Ivc2hhcmUva2V5cmluZ3Mvbm9kZXNvdXJjZS5ncGcKICAgICAgICAgICAgY2F0ID4gL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvbm9kZXNvdXJjZS5zb3VyY2VzIDw8J1JFUE8nCiAgICBUeXBlczogZGViCiAgICBVUklzOiBodHRwczovL2RlYi5ub2Rlc291cmNlLmNvbS9ub2RlXzI0LngKICAgIFN1aXRlczogbm9kaXN0cm8KICAgIENvbXBvbmVudHM6IG1haW4KICAgIEFyY2hpdGVjdHVyZXM6IGFtZDY0CiAgICBTaWduZWQtQnk6IC91c3Ivc2hhcmUva2V5cmluZ3Mvbm9kZXNvdXJjZS5ncGcKICAgIFJFUE8KICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIC1vIEFQVDo6VXBkYXRlOjpFcnJvci1Nb2RlPWFueSB1cGRhdGUKICAgICAgICAgICAgYXB0LWdldCAiJHthcHRfb3B0aW9uc1tAXX0iIGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgbm9kZWpzIG15c3FsLXNlcnZlcgogICAgICAgICAgICAjIExhIGFwbGljYWNpb24gc2UgY29uZWN0YSBwb3IgVENQIGxvY2FsLCBzaW4gZXhwb25lciBNeVNRTCBhIGxhIFZQQy4KICAgICAgICAgICAgY2F0ID4gL2V0Yy9teXNxbC9teXNxbC5jb25mLmQvOTktYXNpc3RlbmNpYS5jbmYgPDwnTVlTUUwnCiAgICBbbXlzcWxkXQogICAgYmluZC1hZGRyZXNzID0gMTI3LjAuMC4xCiAgICBteXNxbHgtYmluZC1hZGRyZXNzID0gMTI3LjAuMC4xCiAgICBNWVNRTAogICAgICAgICAgICBzeXN0ZW1jdGwgZW5hYmxlIG15c3FsCiAgICAgICAgICAgIHN5c3RlbWN0bCByZXN0YXJ0IG15c3FsCiAgICAgICAgICAgIHN5c3RlbWN0bCBpcy1hY3RpdmUgLS1xdWlldCBteXNxbAogICAgICAgICAgICBub2RlIC0tdmVyc2lvbiB8IGdyZXAgLUUgJ152MjRcLicKICAgICAgICAgICAgbnBtIC0tdmVyc2lvbgogICAgICAgICAgICBteXNxbGFkbWluIC0tcHJvdG9jb2w9c29ja2V0IHBpbmcKICAgICAgICAgICAgbXlzcWwgLS1wcm90b2NvbD1zb2NrZXQgLS1iYXRjaCAtLXNraXAtY29sdW1uLW5hbWVzIFwKICAgICAgICAgICAgICAgIC1lICJTRUxFQ1QgQEBiaW5kX2FkZHJlc3MsIEBAbXlzcWx4X2JpbmRfYWRkcmVzczsiCiAgICAgICAgICAgIDs7CiAgICBlc2FjCiAgICBlY2hvICJTZXJ2aWNpb3MgZGUgJHJvbGUgaW5zdGFsYWRvcyBjb3JyZWN0YW1lbnRlIgpydW5jbWQ6Ci0gLSAvdXNyL2xvY2FsL3NiaW4vYXNpc3RlbmNpYS1pbnN0YWxsLXNlcnZpY2VzCg=="
       # END SHARED CLOUD INIT
       ImageId: !Ref LatestAmiId
+      CreditSpecification:
+        CPUCredits: standard
       InstanceType: t3.micro
       KeyName: !Ref GlobomaticsKeyPair
       MetadataOptions:
         HttpEndpoint: enabled
         HttpTokens: required
       BlockDeviceMappings:
-        - DeviceName: /dev/xvda
+        - DeviceName: /dev/sda1
           Ebs:
             VolumeType: gp3
             VolumeSize: 20
@@ -146,7 +150,7 @@ Outputs:
     Value: !GetAtt GlobomaticsBackend.PrivateIp
   ClientSshCommand:
     Description: Conexion al cliente con la privada correspondiente a SshPublicKey.
-    Value: !Sub "ssh -i ~/globomatics-ec2 ec2-user@${GlobomaticsClient.PublicIp}"
+    Value: !Sub "ssh -i ~/globomatics-ec2 ubuntu@${GlobomaticsClient.PublicIp}"
   BackendSshCommand:
     Description: SSH al backend privado mediante frontend; la clave privada permanece local.
-    Value: !Sub 'ssh -i ~/globomatics-ec2 -o "ProxyCommand=ssh -i ~/globomatics-ec2 -W %h:%p ec2-user@${GlobomaticsClient.PublicIp}" ec2-user@${GlobomaticsBackend.PrivateIp}'
+    Value: !Sub 'ssh -i ~/globomatics-ec2 -o "ProxyCommand=ssh -i ~/globomatics-ec2 -W %h:%p ubuntu@${GlobomaticsClient.PublicIp}" ubuntu@${GlobomaticsBackend.PrivateIp}'
