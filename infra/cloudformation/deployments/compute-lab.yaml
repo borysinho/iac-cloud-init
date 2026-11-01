@@ -10,3 +10,4 @@ parameters:
 tags:
   Project: asistencia
   Environment: cloudinit
+  DeploymentRevision: compute-after-network-20261101

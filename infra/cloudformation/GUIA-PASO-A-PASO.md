@@ -55,11 +55,11 @@ Edita [`deployments/network-lab.yaml`](deployments/network-lab.yaml):
 | `Project` | Conservar `asistencia` |
 | `Environment` | Conservar `cloudinit` |
 | `SshSourceCidr` | Tu IP pública administrativa con `/32` |
-| `WebSourceCidr` | IP pública o red autorizada para abrir Nginx por HTTP |
+| `WebSourceCidr` | `0.0.0.0/0` para abrir Nginx por HTTP desde cualquier IPv4 |
 
-Por ejemplo, para acceder por SSH y por navegador desde tu equipo, ambos CIDR pueden contener tu IP pública seguida de `/32`. Obtén esa IP desde tu conexión actual; no uses la IP privada de tu computadora. Los valores incluidos, `192.0.2.1/32`, son documentales y **deben reemplazarse**.
+Para SSH, coloca tu IP pública seguida de `/32`; no uses la IP privada de tu computadora. Para la página pública conserva `WebSourceCidr: 0.0.0.0/0`. Si utilizas una copia antigua con `192.0.2.1/32`, reemplaza ese valor documental.
 
-Si tu IP pública cambia, actualiza los CIDR en el archivo y publica el cambio en la rama sincronizada. Mantén SSH limitado a tu IP o a una red administrativa controlada.
+Si tu IP pública administrativa cambia, actualiza solo `SshSourceCidr` y publica el cambio en la rama sincronizada. Mantén SSH limitado a tu IP o a una red administrativa controlada.
 
 ## 4. Completar los parámetros de cómputo
 
@@ -155,6 +155,14 @@ En **CloudFormation**, región `us-east-2`:
 Espera **`CREATE_COMPLETE`**. Si falla, revisa **Events** y **Git sync** antes de crear cómputo. En **Resources**, confirma que el NAT Gateway esté disponible y que la ruta privada `0.0.0.0/0` apunte a ese NAT.
 
 En **Outputs**, deben aparecer `VpcId`, `PublicSubnetId`, `PrivateSubnetId`, `ClientSecurityGroupId` y `BackendSecurityGroupId`. No tienes que copiarlos al otro archivo: se importan por nombre de pila.
+
+### Si recreaste una pila con el mismo nombre
+
+Una pila que solo contiene `GitSyncSetupWaitCondition` es el marcador de configuracion Git Sync, no la red o los servidores reales. Puede aparecer `CREATE_COMPLETE` sin haber desplegado la plantilla del repositorio. Comprueba siempre **Resources** y **Outputs**, y que la fecha del ultimo intento Git Sync sea posterior a la creacion de la pila actual.
+
+Al retirar el laboratorio, elimina tambien su configuracion Git Sync antes de reutilizar el nombre. Si ya existe una vinculacion anterior, verifica su estado y vuelve a configurarla. Publica un cambio en el archivo de despliegue para solicitar una sincronizacion nueva; por ejemplo, una etiqueta `DeploymentRevision` con un valor diferente. Completa primero red y luego computo. No amplíes permisos IAM si Events o Git Sync no muestran un AccessDenied concreto.
+
+Para crear las pilas directamente sin depender del estado anterior de Git Sync, puedes utilizar **Create stack → Choose an existing template → Upload a template file** y cargar primero `network.yaml`. Introduce los valores de `deployments/network-lab.yaml` manualmente en los parametros; no cargues el archivo de despliegue como plantilla. Selecciona el rol de ejecucion en las opciones del stack. Cuando red tenga sus cinco Outputs, crea computo cargando `compute.yaml` con los valores de su archivo de despliegue. El bootstrap es el mismo y despliega la aplicacion automaticamente en el primer arranque. Esta alternativa no mantiene sincronizacion Git hasta configurarla expresamente.
 
 ## 9. Crear la pila de cómputo
 
@@ -282,3 +290,11 @@ Esta guía describe el procedimiento; no acredita un despliegue ejecutado ni una
 - [UserData y ejecución al primer arranque](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html).
 - [Precios de Amazon VPC y NAT Gateway](https://aws.amazon.com/vpc/pricing/).
 - [Créditos y planes de AWS Free Tier](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier.html).
+
+## Check de GitHub: No export named ...PrivateSubnetId found
+
+El intento del commit `b1b02c2` fallo porque computo ejecuto su change set a las 01:05 (America/La_Paz) mientras red no termino hasta las 01:07 del 1 de noviembre de 2026. No era un fallo del rol de ejecucion. La pila asociada a aquel intento se elimino despues; la pila actual funciona.
+
+Para la primera creacion, completar red y comprobar sus Outputs antes de crear computo. Git Sync de dos pilas independientes no ordena sus despliegues automaticamente. En futuras actualizaciones que cambien red y computo, publicar primero los cambios de red, esperar su finalizacion y despues publicar los de computo. Un check rojo del commit anterior no se corrige cambiando politicas IAM.
+
+Para generar un intento nuevo tras resolver la dependencia, actualizar `tags.DeploymentRevision` en `deployments/compute-lab.yaml` y publicar ese cambio. Esperar el resultado nuevo de Git Sync y de los checks; no marcar manualmente como exitoso un intento fallido.
