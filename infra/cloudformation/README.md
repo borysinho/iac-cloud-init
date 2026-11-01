@@ -1,6 +1,6 @@
 # CloudFormation: aplicación de asistencia
 
-Para realizar el despliegue desde cero, sigue la [guía paso a paso](GUIA-PASO-A-PASO.md).
+Para realizar el despliegue desde cero, sigue la [guía paso a paso](GUIA-PASO-A-PASO.md). Para las EC2 que ya creaste, utiliza [despliegue de la aplicación y actualización de instancias existentes](DESPLIEGUE-APLICACION.md).
 
 Solo dos pilas, sin pila raíz ni pilas anidadas:
 
@@ -18,7 +18,7 @@ El cliente recibe IP pública dinámica. HTTP se permite desde `WebSourceCidr` y
 
 La única fuente es [`../cloud-init.yaml`](../cloud-init.yaml), también para las futuras implementaciones OpenTofu y Pulumi. Instala Nginx en el cliente y Node.js 24 con npm y MySQL en el backend. Detecta la función por la IP privada: `10.42.1.10` o `10.42.2.20`. Una IP desconocida produce un error antes de instalar paquetes. Las futuras configuraciones OpenTofu y Pulumi deben conservar ese mapa o actualizarlo en la fuente común.
 
-MySQL se configura con escucha en `127.0.0.1` para sus puertos SQL y X Protocol. El administrador local utiliza autenticación por socket (`sudo mysql`). Se habilitan Nginx y MySQL al arrancar. Node.js es el runtime; su servicio de aplicación se agregará cuando se copie el código y se definan las credenciales. Todavía no se crean la base de la aplicación, usuarios de negocio, `.env.backend` ni el servicio `asistencia`.
+MySQL se configura con escucha en `127.0.0.1` para sus puertos SQL y X Protocol. El administrador local utiliza autenticación por socket (`sudo mysql`). Se habilitan Nginx y MySQL al arrancar. También se descarga la aplicación desde un commit del repositorio público, se crea su base y usuario SQL, se generan credenciales locales, se inicializan tablas y administrador y se habilita el servicio `asistencia`. El cliente recibe los cuatro archivos estáticos y la configuración del proxy. Consulta `DESPLIEGUE-APLICACION.md` para entrar y aplicar el cambio a instancias existentes.
 
 CloudFormation no lee archivos vecinos del repositorio. Desde la raíz de `cloud-init/`, ejecuta:
 
@@ -27,7 +27,7 @@ python3 infra/cloudformation/scripts/sync-cloud-init.py
 python3 infra/cloudformation/scripts/sync-cloud-init.py --check
 ```
 
-El script incorpora exactamente los mismos bytes en Base64 en `UserData` de ambas EC2. Publica juntos el archivo compartido y `compute.yaml` regenerado: Git Sync vigila la plantilla y el archivo de despliegue. OpenTofu y Pulumi deberán leer la misma fuente directamente.
+El script incorpora la misma plantilla común en `UserData` de ambas EC2; resuelve la URL del commit `AppRevision` y el origen HTTP del cliente mediante funciones de CloudFormation. No hay secretos en UserData. Publica juntos el archivo compartido y `compute.yaml` regenerado: Git Sync vigila la plantilla y el archivo de despliegue. OpenTofu y Pulumi deberán leer la misma fuente y resolver sus dos entradas de despliegue.
 
 El backend permanece sin IP pública. Su nueva ruta de salida usa un NAT Gateway en la subred pública para descargar paquetes de Ubuntu y NodeSource. El NAT y su Elastic IP tienen costo mientras existan. Los creditos aplicables pueden cubrir ese consumo; no se ha comprobado el plan ni el saldo de esta cuenta, por lo que no se garantiza ausencia de cobros a la tarjeta. Antes de desplegar, revisar Billing → Credits y el tipo de plan. No se agregan entradas al grupo de seguridad del backend. Se mantienen exactamente dos pilas y dos EC2.
 
@@ -42,7 +42,7 @@ Los dos archivos de `deployments/` ya están preparados para seleccionar **I am 
 3. Las rutas suponen que `cloud-init/` es la raíz del repositorio. Si está dentro de otro repositorio, antepón su ruta a `template-file-path` y a las rutas que introduces en la consola.
 4. Publica los archivos en la rama elegida. Crea primero `asistencia-cloudinit-network`, con archivo de despliegue `infra/cloudformation/deployments/network-lab.yaml` y plantilla `infra/cloudformation/network.yaml`.
 5. Espera `CREATE_COMPLETE`. Crea `asistencia-cloudinit-compute` con archivo de despliegue `infra/cloudformation/deployments/compute-lab.yaml` y plantilla `infra/cloudformation/compute.yaml`.
-6. Para ambas pilas selecciona el rol de ejecución descrito en `iam/README.md`. El rol Git Sync es independiente.
+6. En el campo IAM de la seccion del repositorio, crea/selecciona el rol **Git Sync**. Despues, en **Configure stack options → Permissions**, selecciona `asistencia-cloudinit-execution`. Son campos y roles diferentes; consulta `iam/README.md`.
 
 `NetworkStackName` debe coincidir con el nombre de la pila de red. Cómputo importa sus salidas por nombre; no se reutilizan IDs anteriores. Ambas pilas deben estar en la misma cuenta y región. Eliminar primero cómputo y después red. Antes de modificar exportaciones existentes, comprobar sus consumidores con `aws cloudformation list-imports --export-name NOMBRE`.
 
@@ -74,7 +74,7 @@ sudo mysql -e "SELECT @@bind_address, @@mysqlx_bind_address;"
 sudo ss -lntp | grep -E ':(3306|33060)\b'
 ```
 
-Esperado: Nginx activo en el cliente, Node `v24.x`, MySQL activo y escuchando solo en localhost. Nginx todavía sirve su página predeterminada; la aplicación se desplegará en el siguiente paso. Si cloud-init falla, revisar el registro antes de reintentar. El instalador conserva los datos de MySQL; no borra ni reinicializa la base.
+Esperado: Nginx activo en el cliente, Node `v24.x`, MySQL activo y escuchando solo en localhost. Nginx debe servir la pantalla de asistencia y `/api/me` debe devolver 401 sin token. El servicio `asistencia` debe estar activo en el backend. Si cloud-init falla, revisar el registro antes de reintentar. El instalador conserva los datos de MySQL; no borra ni reinicializa la base.
 
 Actualizar UserData no vuelve a ejecutar automáticamente todos los módulos de primer arranque en instancias existentes. Este paso se ejecuta automáticamente al crear las nuevas instancias Ubuntu. Para comprobar un servidor ya inicializado se usan los comandos anteriores, no se presupone que reiniciar lo reconfigure.
 
@@ -82,6 +82,7 @@ Actualizar UserData no vuelve a ejecutar automáticamente todos los módulos de 
 
 ```bash
 python3 infra/cloudformation/scripts/sync-cloud-init.py --check
+python3 infra/cloudformation/tests/test_bootstrap.py
 cfn-lint infra/cloudformation/network.yaml infra/cloudformation/compute.yaml
 ```
 

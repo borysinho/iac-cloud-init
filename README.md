@@ -34,10 +34,16 @@ Consulta [la documentación de la aplicación](app/README.md) para sus requisito
 
 ## Paso 2: infraestructura CloudFormation
 
-Se prepararon dos pilas y los archivos de Git Sync y del rol IAM en [infra/cloudformation/](infra/cloudformation/README.md). El único `infra/cloud-init.yaml` se incorpora a las dos EC2 mediante un script de sincronización. El paso inicial aplicaba configuración base; ahora también instala los servicios descritos abajo. El despliegue de la aplicación queda para el siguiente paso. OpenTofu y Pulumi permanecen pendientes. No se han creado recursos en AWS.
+Se prepararon dos pilas y los archivos de Git Sync y del rol IAM en [infra/cloudformation/](infra/cloudformation/README.md). El único `infra/cloud-init.yaml` se incorpora a las dos EC2 mediante un script de sincronización. El paso inicial aplicaba configuración base; ahora también instala los servicios descritos abajo. El despliegue de la aplicación se incorpora en el paso 4. OpenTofu y Pulumi permanecen pendientes. No se han creado recursos en AWS.
 
 ## Paso 3: instalación de servicios
 
 El único `infra/cloud-init.yaml` instala Nginx en el cliente y Node.js 24 con npm y MySQL en el backend. Se utiliza Ubuntu Server 24.04 LTS y salida del backend privado mediante NAT Gateway. La configuración mantiene dos pilas y dos servidores. El NAT añade costo al desplegarlo.
 
-Antes de aplicar: actualizar la política IAM, completar red y después actualizar cómputo. El cambio de AMI reemplaza las EC2; respalda cualquier base existente. Consulta las instrucciones de comprobación en [CloudFormation](infra/cloudformation/README.md). La aplicación, su base y sus credenciales se configurarán en el siguiente paso. No se ha desplegado en AWS.
+Antes de aplicar: actualizar la política IAM, completar red y después actualizar cómputo. El cambio de AMI reemplaza las EC2; respalda cualquier base existente. Consulta las instrucciones de comprobación en [CloudFormation](infra/cloudformation/README.md). La aplicación, su base y sus credenciales se configuran ahora mediante el paso 4. No se ha desplegado en AWS.
+
+## Paso 4: despliegue de la aplicación
+
+Cloud-init descarga una revisión fija del repositorio público, copia el cliente y el backend, configura el proxy de Nginx, genera credenciales locales, inicializa MySQL y habilita la API con systemd. La fuente común se mantiene en `infra/cloud-init.yaml`; cada herramienta debe resolver la URL del código y el origen HTTP del cliente.
+
+Para las instancias ya aprovisionadas, sigue [la actualización de la aplicación](infra/cloudformation/DESPLIEGUE-APLICACION.md): actualizar UserData por sí solo no ejecuta otra vez cloud-init. No se ha aplicado este cambio en las EC2 desde este entorno.

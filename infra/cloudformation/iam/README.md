@@ -6,6 +6,14 @@ Configuración manual en IAM, fuera de las dos pilas. Nombre sugerido: `asistenc
 2. Agrega una política insertada llamada `asistencia-cloudinit-resources` con `execution-policy.json`.
 3. Selecciona este mismo rol en las opciones de ejecución de las pilas de red y cómputo.
 
+## Elegir el rol en el campo correcto
+
+En **Specify stack details**, el campo IAM situado junto a la conexion y el repositorio corresponde a **Git Sync**. Elige **New IAM role** para que AWS cree ese rol con sus permisos y confianza; por ejemplo, `asistencia-cloudinit-network-gitsync`. No selecciones `asistencia-cloudinit-execution` en este campo.
+
+El rol `asistencia-cloudinit-execution` se selecciona despues, en **Configure stack options → Permissions**, como rol de servicio de CloudFormation.
+
+El error `does not trust cloudformation.sync.codeconnections.amazonaws.com` indica que Git Sync recibio un rol cuya confianza no corresponde a ese servicio. Corrige la seleccion del rol Git Sync. Conserva `cloudformation-trust.json` con `cloudformation.amazonaws.com` para ejecucion. No es necesario agregar ambos servicios a la confianza del mismo rol.
+
 La política conserva los permisos de la práctica anterior: ciclo de vida EC2, red, etiquetas, importación de claves públicas y resolución del parámetro público de AMI. Está delimitada a **cuenta `222234418877` y región `us-east-2`**. Reemplaza esos valores en las políticas si el destino cambia. El ARN del parámetro público SSM y los ARN de imágenes y snapshots usan cuenta vacía deliberadamente.
 
 Las consultas EC2 requieren `Resource: "*"`; las escrituras se limitan a tipos de recursos de esa cuenta y región, con IDs aún desconocidos. Este alcance permite administrar otros recursos de esos tipos en el destino: no constituye aislamiento por pila. No concede AdministratorAccess, creación de roles/perfiles IAM. Ahora incluye creación y eliminación de NAT Gateway y Elastic IP para instalar paquetes desde el backend privado, además de sus consultas y etiquetas. El parámetro público de Ubuntu se añade al permiso SSM; se conserva el de Amazon Linux para facilitar rollback. Actualiza esta política manualmente antes de actualizar red y cómputo. No hay rol adjunto a EC2 ni permisos de acceso a AWS desde cloud-init. El cifrado usa la configuración EBS predeterminada; una CMK propia requerirá adaptar permisos KMS.

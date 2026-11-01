@@ -1,5 +1,6 @@
 #cloud-config
-# Fuente unica para CloudFormation, OpenTofu y Pulumi. Ubuntu Server 24.04 amd64.
+# Plantilla comun para CloudFormation, OpenTofu y Pulumi; Ubuntu 24.04 amd64.
+# Resolver las entradas de URL de codigo y origen del cliente antes de entregar a EC2.
 timezone: America/La_Paz
 ssh_pwauth: false
 disable_root: true
@@ -37,7 +38,7 @@ write_files:
 
     case "$role" in
         client)
-            apt-get "${apt_options[@]}" install -y --no-install-recommends nginx
+            apt-get "${apt_options[@]}" install -y --no-install-recommends nginx ca-certificates curl
             nginx -t
             systemctl enable --now nginx
             systemctl is-active --quiet nginx
@@ -78,5 +79,113 @@ write_files:
             ;;
     esac
     echo "Servicios de $role instalados correctamente"
+
+    /usr/local/sbin/asistencia-deploy
+- path: /etc/asistencia-bootstrap.env
+  owner: root:root
+  permissions: '0600'
+  content: |
+    APP_ARCHIVE_URL='__APP_ARCHIVE_URL__'
+    FRONTEND_ORIGIN='__FRONTEND_ORIGIN__'
+- path: /usr/local/sbin/asistencia-deploy
+  owner: root:root
+  permissions: '0750'
+  content: |
+    #!/bin/bash
+    set -euo pipefail
+    trap 'echo "ERROR: despliegue de asistencia interrumpido en linea $LINENO" >&2' ERR
+    . /etc/asistencia-bootstrap.env
+    local_ipv4=$(ip -4 -o address show scope global | awk '{split($4,a,"/"); print a[1]}')
+    if grep -Fxq '10.42.1.10' <<< "$local_ipv4"; then
+        role=client
+    elif grep -Fxq '10.42.2.20' <<< "$local_ipv4"; then
+        role=backend
+    else
+        echo 'IP privada desconocida' >&2; exit 1
+    fi
+    stage=$(mktemp -d)
+    trap 'rm -rf "$stage"' EXIT
+    curl --fail --silent --show-error --location --retry 5 --connect-timeout 10 --max-time 300 \
+        "$APP_ARCHIVE_URL" -o "$stage/app.tar.gz"
+    tar -xzf "$stage/app.tar.gz" --strip-components=1 -C "$stage"
+    source_dir="$stage/app"
+    if [[ "$role" == client ]]; then
+        install -d -m 0755 /var/www/asistencia
+        install -m 0644 "$source_dir"/public/{index.html,app.js,styles.css,config.js} /var/www/asistencia/
+        sed 's|http://192.168.1.30:8090|http://10.42.2.20:8090|' \
+            "$source_dir/deploy/client/asistencia.conf" > /etc/nginx/conf.d/asistencia.conf
+        # Ubuntu incluye su sitio predeterminado en sites-enabled.
+        rm -f /etc/nginx/sites-enabled/default
+        nginx -t
+        systemctl reload nginx
+        curl --fail --silent --show-error http://127.0.0.1/ -o /dev/null
+    else
+        if ! id asistencia >/dev/null 2>&1; then
+            useradd --system --user-group --home-dir /opt/asistencia --no-create-home --shell /usr/sbin/nologin asistencia
+        fi
+        install -d -o root -g asistencia -m 0750 /opt/asistencia
+        # No reemplazar el archivo de secretos ni eliminar datos MySQL existentes.
+        for directory in src scripts database; do
+            cp -a "$source_dir/$directory" /opt/asistencia/
+        done
+        install -d -m 0750 /opt/asistencia/deploy/backend
+        install -m 0640 "$source_dir/deploy/backend/asistencia.service" /opt/asistencia/deploy/backend/
+        install -m 0640 "$source_dir/package.json" "$source_dir/package-lock.json" /opt/asistencia/
+        export FRONTEND_ORIGIN
+        python3 - <<'PY'
+    from pathlib import Path
+    import os, secrets, subprocess, tempfile
+    path = Path('/opt/asistencia/.env.backend')
+    values = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                values[key] = value
+    else:
+        values = dict(DB_PASSWORD=secrets.token_hex(32), ADMIN_USER='admin', ADMIN_PASSWORD=secrets.token_hex(24))
+    # Esta cuenta y base son exclusivas de la aplicacion.
+    values.update(BACKEND_HOST='10.42.2.20', PORT='8090', FRONTEND_ORIGINS=os.environ['FRONTEND_ORIGIN'],
+                  TRUSTED_PROXIES='10.42.1.10', DB_HOST='127.0.0.1', DB_PORT='3306',
+                  DB_USER='asistencia', DB_NAME='uagrm_asistencia', INSTITUTION_TIMEZONE='America/La_Paz')
+    if not values.get('DB_PASSWORD') or len(values.get('ADMIN_PASSWORD','')) < 12:
+        raise SystemExit('Revisar credenciales del archivo existente; no se regeneran automaticamente')
+    # Guardar antes de crear el usuario permite recuperar la misma clave tras un fallo.
+    fd, temporary = tempfile.mkstemp(prefix='.env-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(''.join(f'{key}={value}\n' for key,value in values.items()))
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    password = values['DB_PASSWORD'].replace("'", "''")
+    sql = "SET SESSION sql_mode='NO_BACKSLASH_ESCAPES';\n"
+    sql += "CREATE DATABASE IF NOT EXISTS uagrm_asistencia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"
+    sql += f"CREATE USER IF NOT EXISTS 'asistencia'@'127.0.0.1' IDENTIFIED BY '{password}';\n"
+    sql += f"ALTER USER 'asistencia'@'127.0.0.1' IDENTIFIED BY '{password}';\n"
+    sql += "GRANT ALL PRIVILEGES ON uagrm_asistencia.* TO 'asistencia'@'127.0.0.1';\n"
+    subprocess.run(['mysql','--protocol=socket'], input=sql, text=True, check=True)
+    PY
+        cd /opt/asistencia
+        npm ci --omit=dev --no-audit --no-fund
+        npm run db:init
+        chown -R root:asistencia /opt/asistencia
+        chmod -R u=rwX,g=rX,o= /opt/asistencia
+        chmod 0640 /opt/asistencia/.env.backend
+        sed 's/^After=.*/After=network-online.target mysql.service\nRequires=mysql.service/' \
+            deploy/backend/asistencia.service > /etc/systemd/system/asistencia.service
+        systemctl daemon-reload
+        systemctl enable asistencia
+        systemctl restart asistencia
+        ready=false
+        for attempt in {1..30}; do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 3 http://10.42.2.20:8090/api/me || true)
+            if [[ "$status" == 401 ]]; then ready=true; break; fi
+            sleep 2
+        done
+        [[ "$ready" == true ]]
+        systemctl is-active --quiet asistencia
+    fi
+    echo "Aplicacion desplegada en $role; las credenciales no se imprimen en el registro"
 runcmd:
 - - /usr/local/sbin/asistencia-install-services

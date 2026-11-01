@@ -1,6 +1,6 @@
 # Guía paso a paso: CloudFormation y cloud-init
 
-Esta guía despliega lo implementado hasta ahora: infraestructura y servicios del sistema. Al terminar habrá un cliente con Nginx y un backend con Node.js 24, npm y MySQL. **La aplicación de asistencia todavía no estará publicada**: copiar su código, crear su base de datos y sus credenciales, configurar el proxy y habilitar la API son el siguiente paso.
+Esta guía despliega infraestructura, servicios y la aplicación: Nginx sirve los archivos estáticos y reenvía `/api` al backend Node.js con MySQL. Cloud-init descarga el código y configura los servicios. Si ya aprovisionaste las EC2 antes de añadir la aplicación, sigue [el procedimiento de actualización sin reemplazo](DESPLIEGUE-APLICACION.md).
 
 Se crean exactamente dos pilas:
 
@@ -72,6 +72,7 @@ Edita [`deployments/compute-lab.yaml`](deployments/compute-lab.yaml):
 | `NetworkStackName` | `asistencia-cloudinit-network` |
 | `SshPublicKey` | Línea pública OpenSSH completa, en lugar del marcador |
 | `LatestAmiId` | Conservar el parámetro público de Ubuntu 24.04 incluido |
+| `AppRevision` | Commit publicado de 40 caracteres del repositorio público que contiene `app/` |
 
 Puedes escribir la clave pública en una sola línea entre comillas. No dejes el texto `REEMPLAZAR_POR_CLAVE_PUBLICA_OPENSSH`, porque no cumple la validación del parámetro.
 
@@ -86,7 +87,7 @@ python3 infra/cloudformation/scripts/sync-cloud-init.py
 python3 infra/cloudformation/scripts/sync-cloud-init.py --check
 ```
 
-El segundo comando debe confirmar que ambas EC2 contienen exactamente el archivo compartido. El script solo incorpora `infra/cloud-init.yaml` en `compute.yaml`; no accede a AWS.
+El segundo comando comprueba que ambas EC2 utilizan la plantilla común actualizada y sus entradas de despliegue. El script incorpora `infra/cloud-init.yaml` en `compute.yaml`; no accede a AWS.
 
 Las rutas de `template-file-path` suponen que **`cloud-init/` es la raíz del repositorio Git**. Verifica la raíz real con:
 
@@ -128,10 +129,10 @@ Hay dos funciones IAM distintas:
 
 | Rol | Función |
 |---|---|
-| `asistencia-cloudinit-execution` | Crear y administrar EC2, red y NAT mediante CloudFormation |
-| Rol de Git Sync | Sincronizar el repositorio y gestionar los cambios de la pila |
+| `asistencia-cloudinit-execution` | Crear y administrar EC2, red y NAT; confianza en `cloudformation.amazonaws.com`; seleccionar en **Configure stack options → Permissions** |
+| Rol de Git Sync | Sincronizar el repositorio; confianza en `cloudformation.sync.codeconnections.amazonaws.com`; configurar en **Specify stack details**, junto al repositorio |
 
-Para Git Sync puedes dejar que el asistente genere su rol. El rol generado para una pila puede necesitar cambios para utilizarse en otra; lo más directo es dejar que el asistente configure uno para cada pila. Si se requiere pasar el rol de ejecución, revisa también el permiso limitado `iam:PassRole`. No reemplaces la confianza del rol Git Sync por `cloudformation-trust.json`: tienen principales de servicio diferentes.
+En la seccion del repositorio, selecciona **New IAM role** para que AWS cree el rol Git Sync, por ejemplo `asistencia-cloudinit-network-gitsync`. **No selecciones `asistencia-cloudinit-execution` en ese campo.** El rol generado para una pila puede necesitar cambios para utilizarse en otra; lo más directo es dejar que el asistente configure uno para cada pila. Si se requiere pasar el rol de ejecución, revisa también el permiso limitado `iam:PassRole`. No reemplaces la confianza del rol Git Sync por `cloudformation-trust.json`: tienen principales de servicio diferentes.
 
 ## 8. Crear primero la pila de red
 
@@ -142,8 +143,9 @@ En **CloudFormation**, región `us-east-2`:
 3. Para el archivo de despliegue, selecciona **I am providing my own file in my repository**.
 4. Selecciona conexión, repositorio y rama.
 5. Introduce las rutas de la tabla siguiente, ajustadas a la raíz de tu repositorio.
-6. Configura el rol Git Sync. En las opciones de ejecución del stack, selecciona **`asistencia-cloudinit-execution`**.
-7. Revisa parámetros y envía la creación. Si AWS abre un PR necesario para completar el flujo, revísalo y fusiónalo en la rama conectada.
+6. En **Specify stack details**, junto a la configuracion Git, elige **New IAM role** para Git Sync. Si eliges uno existente, debe ser un rol Git Sync, con confianza en `cloudformation.sync.codeconnections.amazonaws.com`.
+7. Pulsa **Next**. En **Configure stack options → Permissions**, selecciona **`asistencia-cloudinit-execution`** como rol de servicio de CloudFormation.
+8. Revisa parámetros y envía la creación. Si AWS abre un PR necesario para completar el flujo, revísalo y fusiónalo en la rama conectada.
 
 | Campo | Ruta si `cloud-init/` es la raíz del repositorio |
 |---|---|
@@ -163,7 +165,8 @@ Repite el asistente Git Sync con estos valores:
 | Stack name | `asistencia-cloudinit-compute` |
 | Deployment file path | `infra/cloudformation/deployments/compute-lab.yaml` |
 | Template file path | `infra/cloudformation/compute.yaml` |
-| Rol de ejecución | `asistencia-cloudinit-execution` |
+| Rol Git Sync, en la seccion del repositorio | Crear uno para esta pila, por ejemplo `asistencia-cloudinit-compute-gitsync` |
+| Rol de ejecución, en Configure stack options → Permissions | `asistencia-cloudinit-execution` |
 | `NetworkStackName` | `asistencia-cloudinit-network` |
 
 Usa la misma cuenta, región y rama que para red. Revisa cualquier PR que genere AWS y espera **`CREATE_COMPLETE`**.
@@ -190,7 +193,7 @@ sudo nginx -t
 curl -I http://127.0.0.1
 ```
 
-Debes ver cloud-init finalizado sin errores, Nginx habilitado y activo, configuración válida y respuesta HTTP. Desde tu navegador abre `http://IP_PUBLICA_DEL_CLIENTE`: por ahora verás la página predeterminada de Nginx. Tu IP debe estar autorizada por `WebSourceCidr`.
+Debes ver cloud-init finalizado sin errores, Nginx habilitado y activo, configuración válida y respuesta HTTP. Desde tu navegador abre `http://IP_PUBLICA_DEL_CLIENTE`: debes ver la pantalla de asistencia. Tu IP debe estar autorizada por `WebSourceCidr`.
 
 `CREATE_COMPLETE` indica que CloudFormation terminó de crear la infraestructura. No garantiza que cloud-init haya terminado: esta plantilla no incluye señales para que la pila espere la instalación.
 
@@ -223,7 +226,7 @@ curl -I --connect-timeout 10 --max-time 30 https://deb.nodesource.com/
 
 Resultado esperado: Node `v24.x`, npm instalado, MySQL habilitado y activo, respuesta `mysqld is alive` y escucha SQL/X Protocol solo en `127.0.0.1`. La petición HTTPS debe recibir respuesta; confirma que el backend llega al exterior mediante el NAT. No uses `ping` como única comprobación de Internet, porque el destino puede bloquear ICMP.
 
-No debe existir todavía una API activa en el puerto 8090: el código de la aplicación aún no se ha desplegado.
+Comprueba también `systemctl is-active asistencia` en el backend. Desde el cliente, `curl -i http://127.0.0.1/api/me` debe responder 401 sin token. Consulta [cómo obtener las credenciales iniciales](DESPLIEGUE-APLICACION.md#comprobar-y-entrar) en el backend e ingresa por la IP pública del cliente.
 
 ## 12. Actualizaciones posteriores
 
@@ -238,6 +241,7 @@ No debe existir todavía una API activa en el puerto 8090: el código de la apli
 | Síntoma | Qué revisar |
 |---|---|
 | AWS no encuentra un archivo | Ruta desde la raíz del repositorio, rama correcta y archivo publicado |
+| Error `does not trust cloudformation.sync.codeconnections.amazonaws.com` | Se selecciono el rol de ejecucion en el campo Git Sync. Volver a la configuracion del repositorio y crear/seleccionar un rol Git Sync; conservar `asistencia-cloudinit-execution` para las opciones de ejecucion. No modificar su confianza para mezclar los dos roles. |
 | Git Sync no avanza | Estado de la conexión, autorización del repositorio, rol Git Sync y PR pendiente |
 | Error `PassRole` o `AccessDenied` | Identidad que entrega el rol, permisos del rol de ejecución, cuenta/región, SCP y límites de permisos |
 | Exportación de red no encontrada | Red en `CREATE_COMPLETE`, nombre exacto de `NetworkStackName`, misma cuenta/región |
@@ -245,7 +249,7 @@ No debe existir todavía una API activa en el puerto 8090: el código de la apli
 | SSH al backend no conecta | ProxyCommand desde tu equipo, cliente disponible y grupo de seguridad asociado al backend |
 | Cloud-init falla al descargar paquetes | NAT disponible, ruta privada hacia NAT, ruta pública hacia Internet Gateway, DNS y salidas permitidas |
 | Navegador no abre Nginx | `WebSourceCidr`, IP pública, puerto 80, estado de Nginx y resultado de cloud-init |
-| Aparece la bienvenida de Nginx | Es el resultado esperado en este paso; falta desplegar la aplicación |
+| Aparece la bienvenida de Nginx | Aplicar el despliegue de la aplicación en el cliente; para EC2 existentes seguir DESPLIEGUE-APLICACION.md |
 | Cambié cloud-init y no se ejecutó otra vez | Plantilla regenerada y comportamiento de módulos de primer arranque |
 
 Para investigar errores de arranque, consulta también `sudo less /var/log/cloud-init.log`. Si cloud-init informa errores, conserva los registros y corrige la causa antes de repetir la instalación; no borres el estado de cloud-init ni la base de datos para forzar un reintento.
@@ -263,6 +267,8 @@ Detener las EC2 no detiene la facturación del NAT Gateway. Al eliminar red, ver
 - [ ] Cloud-init finalizado sin errores en las dos EC2.
 - [ ] Nginx habilitado, activo y accesible desde la red autorizada.
 - [ ] Node.js 24 y npm disponibles en el backend.
+- [ ] Servicio `asistencia` activo, esquema inicializado y proxy `/api/me` respondiendo 401 sin token.
+- [ ] Pantalla de asistencia accesible y cuenta inicial comprobada.
 - [ ] MySQL habilitado, activo y restringido a localhost.
 - [ ] Repositorio sin claves privadas ni credenciales reales.
 
