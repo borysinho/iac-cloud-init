@@ -1,0 +1,10 @@
+# Rutas relativas a la raiz del repositorio cloud-init.
+template-file-path: infra/cloudformation/network.yaml
+parameters:
+  Project: asistencia
+  Environment: cloudinit
+  SshSourceCidr: 192.0.2.1/32
+  WebSourceCidr: 192.0.2.1/32
+tags:
+  Project: asistencia
+  Environment: cloudinit

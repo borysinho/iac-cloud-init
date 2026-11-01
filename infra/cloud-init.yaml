@@ -1,0 +1,6 @@
+#cloud-config
+# Fuente unica para OpenTofu, Pulumi y CloudFormation.
+# La instalacion de los servicios de la aplicacion se agregara en el siguiente paso.
+timezone: America/La_Paz
+ssh_pwauth: false
+disable_root: true

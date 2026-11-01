@@ -1,0 +1,11 @@
+# Completar la clave PUBLICA antes de conectar Git Sync.
+template-file-path: infra/cloudformation/compute.yaml
+parameters:
+  Project: asistencia
+  Environment: cloudinit
+  NetworkStackName: asistencia-cloudinit-network
+  SshPublicKey: REEMPLAZAR_POR_CLAVE_PUBLICA_OPENSSH
+  LatestAmiId: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.18-x86_64
+tags:
+  Project: asistencia
+  Environment: cloudinit
