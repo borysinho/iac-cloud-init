@@ -8,3 +8,4 @@ parameters:
 tags:
   Project: asistencia
   Environment: cloudinit
+  DeploymentRevision: network-bootstrap-20261101
