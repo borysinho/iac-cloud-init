@@ -1,0 +1,7 @@
+account_id      = "222234418877"
+region          = "us-east-2"
+project         = "asistencia"
+environment     = "cloudinit-opentofu"
+ssh_source_cidr = "181.188.164.3/32" # Verificar tu IP publica actual.
+web_source_cidr = "0.0.0.0/0"
+# availability_zone = "us-east-2a"

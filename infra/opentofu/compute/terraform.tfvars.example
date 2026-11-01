@@ -1,0 +1,8 @@
+account_id          = "222234418877"
+region              = "us-east-2"
+project             = "asistencia"
+environment         = "cloudinit-opentofu"
+ssh_public_key_path = "~/globomatics-ec2.pub"
+app_revision        = "9e4d440276547607498f8aa3342c6234bb030f45"
+ami_parameter       = "/aws/service/canonical/ubuntu/server/noble/stable/current/amd64/hvm/ebs-gp3/ami-id"
+# network_state_path = "/ruta/absoluta/al/network/terraform.tfstate"

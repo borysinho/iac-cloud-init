@@ -93,3 +93,5 @@ Confirmar la AMI pública SSM en la región y revisar el change set antes de apl
 Referencias: [Git Sync](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/git-sync-create-stack-from-repository-source-code.html), [UserData EC2](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-instance.html).
 
 Fuentes de instalación: [AMI Ubuntu en CloudFormation](https://documentation.ubuntu.com/aws/aws-how-to/instances/build-cloudformation-templates/), [MySQL en Ubuntu](https://ubuntu.com/server/docs/databases-mysql/), [NodeSource 24](https://github.com/nodesource/distributions/blob/master/scripts/deb/setup_24.x), [NAT Gateway](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-ec2-natgateway.html).
+
+Consulta la [verificación real en AWS del 1 de noviembre](VERIFICACION-AWS.md), con recursos, resultados y el bloqueo FortiGuard detectado.

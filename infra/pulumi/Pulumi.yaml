@@ -1,0 +1,3 @@
+name: asistencia-cloudinit
+runtime: nodejs
+description: Dos stacks AWS, red y computo, con cloud-init compartido.

@@ -23,7 +23,8 @@ Parameters:
     Description: IP administrativa autorizada para SSH; usar una IP /32.
   WebSourceCidr:
     Type: String
-    Description: CIDR IPv4 autorizado para HTTP; usar una red controlada.
+    Default: 0.0.0.0/0
+    Description: Acceso HTTP publico desde cualquier IPv4; mantener 0.0.0.0/0 para la pagina publica.
     AllowedPattern: '([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])'
 Resources:
   GlobomaticsVpc:

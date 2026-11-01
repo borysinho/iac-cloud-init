@@ -1,0 +1,8 @@
+config:
+  aws:region: us-east-2
+  asistencia-cloudinit:layer: network
+  asistencia-cloudinit:accountId: '222234418877'
+  asistencia-cloudinit:project: asistencia
+  asistencia-cloudinit:environment: cloudinit-pulumi
+  asistencia-cloudinit:sshSourceCidr: 181.188.164.3/32
+  asistencia-cloudinit:webSourceCidr: 0.0.0.0/0
