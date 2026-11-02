@@ -20,7 +20,7 @@ after(()=>rmSync(temporary,{recursive:true,force:true}));
 test('dos EC2 y el mismo cloud-init, con origen del cliente resuelto para backend',async()=>{
  const infra=await pulumi.runtime.runInPulumiStack(async()=>require('../index.ts'));
  const out=await new Promise(resolve=>pulumi.output(infra.deployment).apply(resolve));
- assert.equal(out.url,'http://203.0.113.10');
+ assert.equal(out.url,'https://203.0.113.10');
  const instances=resources.filter(r=>r.type==='aws:ec2/instance:Instance').map(r=>r.inputs);
  assert.equal(instances.length,2);
  const source=readFileSync(resolve(__dirname,'../../cloud-init.yaml'),'utf8');
@@ -31,12 +31,12 @@ test('dos EC2 y el mismo cloud-init, con origen del cliente resuelto para backen
   assert.equal(instance.ami,'ami-test');assert.equal(instance.instanceType,'t3.micro');
   assert.equal(instance.metadataOptions.httpTokens,'required');assert.equal(instance.creditSpecification.cpuCredits,'standard');
   assert.equal(instance.rootBlockDevice.encrypted,true);assert.equal(instance.rootBlockDevice.volumeSize,client?12:20);
-  const expected=source.replace('__APP_ARCHIVE_URL__','https://github.com/borysinho/iac-cloud-init/archive/9e4d440276547607498f8aa3342c6234bb030f45.tar.gz').replace('__FRONTEND_ORIGIN__',client?'http://127.0.0.1':'http://203.0.113.10');
+  const expected=source.replace('__APP_ARCHIVE_URL__','https://github.com/borysinho/iac-cloud-init/archive/9e4d440276547607498f8aa3342c6234bb030f45.tar.gz').replace('__FRONTEND_ORIGIN__',client?'https://127.0.0.1':'https://203.0.113.10');
   assert.equal(instance.userData,expected);assert.ok(Buffer.byteLength(instance.userData)<16384);
   assert.equal(instance.userDataReplaceOnChange,false);
  }
  assert.equal(resources.filter(r=>r.type==='aws:ec2/vpc:Vpc').length,0);
  const {renderCloudInit}=require('../src/cloud-init.ts');
- assert.throws(()=>renderCloudInit('main','http://203.0.113.10'));
+ assert.throws(()=>renderCloudInit('main','https://203.0.113.10'));
  assert.throws(()=>renderCloudInit('a'.repeat(40),"http://example.test'"));
 });

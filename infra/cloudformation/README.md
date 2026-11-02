@@ -1,5 +1,7 @@
 # CloudFormation: aplicación de asistencia
 
+La configuración actual incluye [HTTPS con certificado autofirmado](../HTTPS.md), redirección de HTTP a HTTPS y origen HTTPS en el backend. Este cambio actualiza los ejemplos HTTP de las etapas previas.
+
 Para realizar el despliegue desde cero, sigue la [guía paso a paso](GUIA-PASO-A-PASO.md). Para las EC2 que ya creaste, utiliza [despliegue de la aplicación y actualización de instancias existentes](DESPLIEGUE-APLICACION.md).
 
 Solo dos pilas, sin pila raíz ni pilas anidadas:
@@ -62,7 +64,7 @@ sudo tail -n 100 /var/log/cloud-init-output.log
 # Cliente
 systemctl is-enabled nginx
 systemctl is-active nginx
-curl -I http://127.0.0.1
+curl --cacert /etc/ssl/certs/asistencia.crt -I https://127.0.0.1
 
 # Backend (SSH a traves del cliente)
 node --version

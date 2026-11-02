@@ -1,5 +1,7 @@
 # Guía paso a paso: CloudFormation y cloud-init
 
+La configuración actual añade [HTTPS autofirmado](../HTTPS.md). Los accesos HTTP de las etapas anteriores ahora redirigen a HTTPS; utiliza la URL con `https://` y la confianza explícita en el certificado para las comprobaciones.
+
 Esta guía despliega infraestructura, servicios y la aplicación: Nginx sirve los archivos estáticos y reenvía `/api` al backend Node.js con MySQL. Cloud-init descarga el código y configura los servicios. Si ya aprovisionaste las EC2 antes de añadir la aplicación, sigue [el procedimiento de actualización sin reemplazo](DESPLIEGUE-APLICACION.md).
 
 Se crean exactamente dos pilas:

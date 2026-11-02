@@ -43,11 +43,11 @@ run "compute_equivalence" {
     error_message = "Discos cifrados y tamanos equivalentes."
   }
   assert {
-    condition     = aws_instance.client.user_data == replace(replace(file("${path.module}/../../cloud-init.yaml"), "__APP_ARCHIVE_URL__", local.app_archive_url), "__FRONTEND_ORIGIN__", "http://127.0.0.1") && aws_instance.backend.user_data == replace(replace(file("${path.module}/../../cloud-init.yaml"), "__APP_ARCHIVE_URL__", local.app_archive_url), "__FRONTEND_ORIGIN__", "http://203.0.113.10")
+    condition     = aws_instance.client.user_data == replace(replace(file("${path.module}/../../cloud-init.yaml"), "__APP_ARCHIVE_URL__", local.app_archive_url), "__FRONTEND_ORIGIN__", "https://127.0.0.1") && aws_instance.backend.user_data == replace(replace(file("${path.module}/../../cloud-init.yaml"), "__APP_ARCHIVE_URL__", local.app_archive_url), "__FRONTEND_ORIGIN__", "https://203.0.113.10")
     error_message = "Usar exactamente la fuente comun con sus dos entradas resueltas."
   }
   assert {
-    condition     = !aws_instance.client.user_data_replace_on_change && !aws_instance.backend.user_data_replace_on_change && output.deployment.url == "http://203.0.113.10"
+    condition     = !aws_instance.client.user_data_replace_on_change && !aws_instance.backend.user_data_replace_on_change && output.deployment.url == "https://203.0.113.10"
     error_message = "No reemplazar automaticamente las EC2 por cambios de UserData."
   }
 }

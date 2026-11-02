@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 export function renderCloudInit(revision: string, origin: string): string {
     if (!/^[a-f0-9]{40}$/.test(revision))
         throw new Error("appRevision debe ser un commit publicado de 40 caracteres");
-    if (!/^http:\/\/(?:\d{1,3}\.){3}\d{1,3}$/.test(origin))
-        throw new Error("Origen HTTP IPv4 invalido");
+    if (!/^https?:\/\/(?:\d{1,3}\.){3}\d{1,3}$/.test(origin))
+        throw new Error("Origen HTTP(S) IPv4 invalido");
     let data = readFileSync(resolve(__dirname, "../../cloud-init.yaml"), "utf8");
     if (!data.startsWith("#cloud-config\n"))
         throw new Error("Formato cloud-init invalido");

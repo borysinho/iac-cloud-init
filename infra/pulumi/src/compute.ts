@@ -19,15 +19,15 @@ export function createCompute() {
     const client = new aws.ec2.Instance("client", {
         ...base, subnetId: deployment.publicSubnetId, privateIp: "10.42.1.10", associatePublicIpAddress: true, vpcSecurityGroupIds: [deployment.clientSecurityGroupId],
         rootBlockDevice: { volumeType: "gp3", volumeSize: 12, encrypted: true, deleteOnTermination: true },
-        userData: renderCloudInit(revision, "http://127.0.0.1"), tags: { ...tags("ec2-cliente"), Role: "client" },
+        userData: renderCloudInit(revision, "https://127.0.0.1"), tags: { ...tags("ec2-cliente"), Role: "client" },
     }, options);
     const backend = new aws.ec2.Instance("backend", {
         ...base, subnetId: deployment.privateSubnetId, privateIp: "10.42.2.20", associatePublicIpAddress: false, vpcSecurityGroupIds: [deployment.backendSecurityGroupId],
         rootBlockDevice: { volumeType: "gp3", volumeSize: 20, encrypted: true, deleteOnTermination: true },
-        userData: client.publicIp.apply(ip => renderCloudInit(revision, `http://${ip}`)), tags: { ...tags("ec2-backend"), Role: "backend" },
+        userData: client.publicIp.apply(ip => renderCloudInit(revision, `https://${ip}`)), tags: { ...tags("ec2-backend"), Role: "backend" },
     }, options);
     return { clientInstanceId: client.id, backendInstanceId: backend.id, clientPublicIp: client.publicIp, backendPrivateIp: backend.privateIp,
-        url: pulumi.interpolate `http://${client.publicIp}`, appRevision: revision,
+        url: pulumi.interpolate `https://${client.publicIp}`, appRevision: revision,
         clientSsh: pulumi.interpolate `ssh -i ~/globomatics-ec2 ubuntu@${client.publicIp}`,
         backendSsh: pulumi.interpolate `ssh -i ~/globomatics-ec2 -o "ProxyCommand=ssh -i ~/globomatics-ec2 -W %h:%p ubuntu@${client.publicIp}" ubuntu@10.42.2.20` };
 }

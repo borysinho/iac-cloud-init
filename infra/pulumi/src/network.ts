@@ -20,7 +20,7 @@ export function createNetwork() {
     const egress = [{ protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: ["0.0.0.0/0"] }];
     const clientGroup = new aws.ec2.SecurityGroup("client-security", {
         vpcId: vpc.id, description: "Cliente HTTP y bastion SSH", tags: tags("secgrp-cliente"), egress,
-        ingress: [{ protocol: "tcp", fromPort: 22, toPort: 22, cidrBlocks: [ssh] }, { protocol: "tcp", fromPort: 80, toPort: 80, cidrBlocks: [web] }],
+        ingress: [{ protocol: "tcp", fromPort: 22, toPort: 22, cidrBlocks: [ssh] }, { protocol: "tcp", fromPort: 80, toPort: 80, cidrBlocks: [web] }, { protocol: "tcp", fromPort: 443, toPort: 443, cidrBlocks: [web] }],
     }, options);
     const backendGroup = new aws.ec2.SecurityGroup("backend-security", {
         vpcId: vpc.id, description: "API y SSH desde cliente; MySQL local", tags: tags("secgrp-backend"), egress,

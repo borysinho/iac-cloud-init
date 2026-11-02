@@ -1,5 +1,7 @@
 # Desplegar la aplicación con cloud-init
 
+Actualización: la fuente común ahora configura [HTTPS con certificado autofirmado](../HTTPS.md). Los comandos de etapas HTTP anteriores deben usar HTTPS y el certificado público como confianza explícita; el origen del backend ahora empieza con `https://`.
+
 El archivo común `../cloud-init.yaml` ahora instala servicios y copia la aplicación desde el repositorio público `borysinho/iac-cloud-init`. Mantiene las dos pilas, dos servidores y el NAT Gateway existente. No requiere nuevos roles, buckets ni credenciales de Git.
 
 ## Qué instala

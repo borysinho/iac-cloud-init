@@ -17,6 +17,7 @@ test('red equivalente con HTTP publico, backend aislado y NAT administrado',asyn
  assert.ok(of('aws:ec2/subnet:Subnet').every(s=>s.availabilityZone==='us-east-2a'&&!s.mapPublicIpOnLaunch));
  const [client,backend]=of('aws:ec2/securityGroup:SecurityGroup');
  assert.equal(client.ingress.find(r=>r.fromPort===80).cidrBlocks[0],'0.0.0.0/0');
+ assert.equal(client.ingress.find(r=>r.fromPort===443).cidrBlocks[0],'0.0.0.0/0');
  assert.equal(client.ingress.find(r=>r.fromPort===22).cidrBlocks[0],'181.188.164.3/32');
  assert.deepEqual(backend.ingress.map(r=>r.fromPort),[22,8090]);
  assert.ok(backend.ingress.every(r=>r.securityGroups[0]==='client-security-id'&&!r.cidrBlocks?.length));

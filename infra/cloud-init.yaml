@@ -1,6 +1,5 @@
 #cloud-config
-# Plantilla comun para CloudFormation, OpenTofu y Pulumi; Ubuntu 24.04 amd64.
-# Resolver las entradas de URL de codigo y origen del cliente antes de entregar a EC2.
+# Fuente comun: HTTPS autofirmado, aplicacion y servicios. Ubuntu 24.04 amd64.
 timezone: America/La_Paz
 ssh_pwauth: false
 disable_root: true
@@ -38,7 +37,7 @@ write_files:
 
     case "$role" in
         client)
-            apt-get "${apt_options[@]}" install -y --no-install-recommends nginx ca-certificates curl
+            apt-get "${apt_options[@]}" install -y --no-install-recommends nginx ca-certificates curl openssl
             nginx -t
             systemctl enable --now nginx
             systemctl is-active --quiet nginx
@@ -114,11 +113,32 @@ write_files:
         install -m 0644 "$source_dir"/public/{index.html,app.js,styles.css,config.js} /var/www/asistencia/
         sed 's|http://192.168.1.30:8090|http://10.42.2.20:8090|' \
             "$source_dir/deploy/client/asistencia.conf" > /etc/nginx/conf.d/asistencia.conf
+        # Certificado local: clave privada solo en el cliente; SAN con su IP publica actual.
+        token=$(curl --fail --silent --show-error --max-time 10 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token)
+        public_ip=$(curl --fail --silent --show-error --max-time 10 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4)
+        python3 -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$public_ip"
+        if [[ ! -s /etc/ssl/private/asistencia.key || ! -s /etc/ssl/certs/asistencia.crt ]] || \
+            ! openssl x509 -in /etc/ssl/certs/asistencia.crt -noout -checkend 2592000 >/dev/null || \
+            ! openssl x509 -in /etc/ssl/certs/asistencia.crt -noout -checkip "$public_ip" >/dev/null; then
+            umask 077
+            openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 \
+                -keyout /etc/ssl/private/asistencia.key -out /etc/ssl/certs/asistencia.crt \
+                -subj "/CN=$public_ip" -addext "subjectAltName=IP:$public_ip,IP:10.42.1.10,IP:127.0.0.1"
+        fi
+        chmod 0600 /etc/ssl/private/asistencia.key
+        chmod 0644 /etc/ssl/certs/asistencia.crt
+        python3 - <<'TLS'
+    from pathlib import Path
+    path = Path('/etc/nginx/conf.d/asistencia.conf')
+    content = path.read_text().replace('    listen 80;', '    listen 443 ssl;\n    ssl_certificate /etc/ssl/certs/asistencia.crt;\n    ssl_certificate_key /etc/ssl/private/asistencia.key;\n    ssl_protocols TLSv1.2 TLSv1.3;')
+    redirect = 'server { listen 80; server_name _; return 301 https://$host$request_uri; }\n'
+    path.write_text(redirect + content)
+    TLS
         # Ubuntu incluye su sitio predeterminado en sites-enabled.
         rm -f /etc/nginx/sites-enabled/default
         nginx -t
         systemctl reload nginx
-        curl --fail --silent --show-error http://127.0.0.1/ -o /dev/null
+        curl --fail --silent --show-error --cacert /etc/ssl/certs/asistencia.crt https://127.0.0.1/ -o /dev/null
     else
         if ! id asistencia >/dev/null 2>&1; then
             useradd --system --user-group --home-dir /opt/asistencia --no-create-home --shell /usr/sbin/nologin asistencia

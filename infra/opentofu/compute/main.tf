@@ -38,7 +38,7 @@ resource "aws_instance" "client" {
     encrypted             = true
     delete_on_termination = true
   }
-  user_data                   = replace(local.common_user_data, "__FRONTEND_ORIGIN__", "http://127.0.0.1")
+  user_data                   = replace(local.common_user_data, "__FRONTEND_ORIGIN__", "https://127.0.0.1")
   user_data_replace_on_change = false
   tags                        = { Name = "ec2-cliente-${local.suffix}", Role = "client" }
   lifecycle {
@@ -75,7 +75,7 @@ resource "aws_instance" "backend" {
     encrypted             = true
     delete_on_termination = true
   }
-  user_data                   = replace(local.common_user_data, "__FRONTEND_ORIGIN__", "http://${aws_instance.client.public_ip}")
+  user_data                   = replace(local.common_user_data, "__FRONTEND_ORIGIN__", "https://${aws_instance.client.public_ip}")
   user_data_replace_on_change = false
   tags                        = { Name = "ec2-backend-${local.suffix}", Role = "backend" }
 }

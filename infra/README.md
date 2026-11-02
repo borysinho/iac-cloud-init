@@ -1,8 +1,10 @@
 # Infraestructura
 
-- `cloudformation/`: dos pilas de red y cómputo, archivos Git Sync y políticas IAM; consultar su README.
-- `opentofu/`: reservado para los siguientes pasos.
-- `pulumi/`: reservado para los siguientes pasos.
-- `cloud-init.yaml`: fuente única de configuración de servidores para las tres herramientas; instalación de servicios y despliegue de la aplicación según la IP privada, sobre Ubuntu 24.04; resolver URL del código y origen del cliente.
+Las tres implementaciones utilizan `cloud-init.yaml` como fuente única para instalar los servicios y desplegar la aplicación con HTTPS autofirmado.
 
-La aplicación permanece separada en `../app/`. No se han desplegado recursos en AWS.
+- `cloudformation/`: dos pilas de red y cómputo, plantillas y guías; infraestructura AWS retirada tras su validación.
+- `pulumi/`: dos stacks equivalentes; infraestructura AWS retirada después de su validación.
+- `opentofu/`: dos configuraciones y estados independientes; **despliegue activo**.
+- `HTTPS.md`: certificado, confianza y renovación.
+
+La aplicación permanece separada en `../app/`. Estado vigente, recursos y pruebas: [verificación de OpenTofu](opentofu/VERIFICACION-AWS.md).

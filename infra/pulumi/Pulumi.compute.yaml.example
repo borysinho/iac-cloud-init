@@ -4,7 +4,7 @@ config:
   asistencia-cloudinit:accountId: '222234418877'
   asistencia-cloudinit:project: asistencia
   asistencia-cloudinit:environment: cloudinit-pulumi
-  asistencia-cloudinit:networkStack: REEMPLAZAR_ORGANIZACION/asistencia-cloudinit/network
+  asistencia-cloudinit:networkStack: organization/asistencia-cloudinit/network
   asistencia-cloudinit:sshPublicKeyPath: ~/globomatics-ec2.pub
   asistencia-cloudinit:appRevision: 9e4d440276547607498f8aa3342c6234bb030f45
   asistencia-cloudinit:amiParameter: /aws/service/canonical/ubuntu/server/noble/stable/current/amd64/hvm/ebs-gp3/ami-id

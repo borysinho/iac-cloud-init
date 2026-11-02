@@ -82,6 +82,12 @@ resource "aws_security_group" "client" {
     to_port     = 80
     cidr_blocks = [var.web_source_cidr]
   }
+  ingress {
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_blocks = [var.web_source_cidr]
+  }
   egress {
     protocol    = "-1"
     from_port   = 0

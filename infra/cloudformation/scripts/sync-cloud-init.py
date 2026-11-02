@@ -40,7 +40,7 @@ def main():
         revision = args.revision or re.search(r'  AppRevision:\n    Type: String\n    Default: ([a-f0-9]{40})', before).group(1)
         if not re.fullmatch('[a-f0-9]{40}', revision):
             parser.error('--revision debe ser un commit de 40 caracteres hexadecimales')
-        resolved = ''.join(fragments(payload, {'__APP_ARCHIVE_URL__': ARCHIVE_PREFIX + revision + '.tar.gz', '__FRONTEND_ORIGIN__': 'http://' + address}))
+        resolved = ''.join(fragments(payload, {'__APP_ARCHIVE_URL__': ARCHIVE_PREFIX + revision + '.tar.gz', '__FRONTEND_ORIGIN__': 'https://' + address}))
         args.render_dir.mkdir(parents=True, exist_ok=True)
         for role in ('client', 'backend'):
             (args.render_dir / f'{role}-cloud-init.yaml').write_text(resolved)
@@ -50,7 +50,7 @@ def main():
 
     def replace_block(match):
         nonlocal index
-        origin = 'http://127.0.0.1' if index == 0 else {'Fn::Join': ['', ['http://', {'Fn::GetAtt': ['GlobomaticsClient', 'PublicIp']}]]}
+        origin = 'https://127.0.0.1' if index == 0 else {'Fn::Join': ['', ['https://', {'Fn::GetAtt': ['GlobomaticsClient', 'PublicIp']}]]}
         values = {'__APP_ARCHIVE_URL__': {'Fn::Join': ['', [ARCHIVE_PREFIX, {'Ref': 'AppRevision'}, '.tar.gz']]}, '__FRONTEND_ORIGIN__': origin}
         data = {'Fn::Base64': {'Fn::Join': ['', fragments(payload, values)]}}
         index += 1

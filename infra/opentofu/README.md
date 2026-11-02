@@ -1,5 +1,9 @@
 # Asistencia con OpenTofu y cloud-init
 
+Despliegue activo comprobado: **https://18.119.120.80/**. Consulta [la verificación real y la retirada de Pulumi](VERIFICACION-AWS.md).
+
+La configuración actual incluye [HTTPS con certificado autofirmado](../HTTPS.md), redirección de HTTP a HTTPS y origen HTTPS en el backend. Este cambio actualiza los ejemplos HTTP de las etapas previas.
+
 Misma configuración del laboratorio actual, con dos configuraciones raíz y estados independientes:
 
 ```text
@@ -39,6 +43,17 @@ cd '/home/borysquiroga/Documentos/docs/Diplomado/Módulo 2/cloud-init/infra/open
 
 Si utilizas un perfil, configura `AWS_PROFILE` antes de ejecutar OpenTofu. No se usa el rol de ejecución de CloudFormation ni el rol Git Sync. Sus políticas de recursos sirven como referencia, pero no modifiques la confianza de esos roles para usar OpenTofu.
 
+### Adaptador de la sesión AWS actual
+
+Para la ejecución real se utiliza `scripts/aws-session.py`. Obtiene credenciales temporales mediante AWS CLI y las entrega solo en memoria al proceso OpenTofu; no las imprime ni las guarda en archivos. Esto permite utilizar la sesión de `aws login` existente con el proveedor AWS.
+
+```bash
+python3 scripts/aws-session.py tofu -chdir=network plan
+python3 scripts/aws-session.py tofu -chdir=compute plan
+```
+
+Si utilizas un perfil diferente, añade `--profile NOMBRE` antes de `tofu`. El adaptador trabaja desde esta carpeta y no modifica la configuración global de AWS.
+
 ## 2. Estado local separado
 
 Cada carpeta usa el backend `local` y guarda su propio `terraform.tfstate`. No se crea un bucket de estado ni una tercera configuración. Se incluye un `.terraform.lock.hcl` por carpeta para fijar el proveedor AWS; estos lockfiles se deben versionar.
@@ -63,9 +78,9 @@ Edita `network/terraform.tfvars`:
 ```bash
 tofu -chdir=network init
 tofu -chdir=network validate
-tofu -chdir=network plan -out=network.tfplan
-tofu -chdir=network apply network.tfplan
-tofu -chdir=network output -json deployment
+python3 scripts/aws-session.py tofu -chdir=network plan -out=network.tfplan
+python3 scripts/aws-session.py tofu -chdir=network apply network.tfplan
+python3 scripts/aws-session.py tofu -chdir=network output -json deployment
 ```
 
 Revisa el plan antes de aplicar. Espera que termine la red; su salida debe mostrar `ready: true`, IDs de subredes, grupos y NAT. El contrato se publica después de completar las rutas y asociaciones.
@@ -86,9 +101,9 @@ Edita `compute/terraform.tfvars`:
 ```bash
 tofu -chdir=compute init
 tofu -chdir=compute validate
-tofu -chdir=compute plan -out=compute.tfplan
-tofu -chdir=compute apply compute.tfplan
-tofu -chdir=compute output -json deployment
+python3 scripts/aws-session.py tofu -chdir=compute plan -out=compute.tfplan
+python3 scripts/aws-session.py tofu -chdir=compute apply compute.tfplan
+python3 scripts/aws-session.py tofu -chdir=compute output -json deployment
 ```
 
 No introduzcas IDs de CloudFormation ni de Pulumi. Cómputo obtiene sus IDs del estado de red y verifica que corresponde a la misma cuenta, región, proyecto y entorno.
@@ -118,8 +133,8 @@ En el cliente:
 ```bash
 sudo nginx -t
 systemctl is-active nginx
-curl -I http://127.0.0.1/
-curl -i http://127.0.0.1/api/me
+curl --cacert /etc/ssl/certs/asistencia.crt -I https://127.0.0.1/
+curl --cacert /etc/ssl/certs/asistencia.crt -i https://127.0.0.1/api/me
 ```
 
 Esperado: página HTTP 200 y `/api/me` HTTP 401 sin sesión. En el backend, a través del cliente:
@@ -164,10 +179,10 @@ Se comprueban red, NAT, reglas de acceso, IPs, discos, IMDSv2, CPU, origen del c
 Cuando decidas retirar este laboratorio, respalda los datos y ejecuta **primero cómputo y después red**, revisando ambas operaciones:
 
 ```bash
-tofu -chdir=compute plan -destroy
-tofu -chdir=compute destroy
-tofu -chdir=network plan -destroy
-tofu -chdir=network destroy
+python3 scripts/aws-session.py tofu -chdir=compute plan -destroy
+python3 scripts/aws-session.py tofu -chdir=compute destroy
+python3 scripts/aws-session.py tofu -chdir=network plan -destroy
+python3 scripts/aws-session.py tofu -chdir=network destroy
 ```
 
 Conserva los estados hasta comprobar que la retirada terminó. Verifica que se hayan eliminado NAT y su Elastic IP. Detener las EC2 no elimina esos recursos ni su consumo. No elimines recursos de CloudFormation o Pulumi para completar esta guía.
